@@ -15,7 +15,7 @@ class EProcess:
 
     Attributes:
     _values: np.ndarray
-        The time series of values
+        The time series of values, on a log scale.
 
     Methods:
     __getitem__(item: int) -> float:
@@ -28,10 +28,9 @@ class EProcess:
         Appends the given values to the time series starting at the given index.
         Requires that the number of values to append is at least as long as the time series minus the start index
     """
-    _values: np.ndarray = field(default_factory=lambda: np.array([0.0]))
-    running_max: float = field(default_factory=lambda: 0.0)
-    # TODO: log scale or linear scale?
-    # TODO: constructor check that first value is 1 (linear scale) or 0 (log scale)
+    _values: np.ndarray = field(default_factory=lambda: np.array([]))
+    running_max: float = -np.inf
+    # TODO: running_max is never updated?
 
     def __getitem__(self, item):
         try:
@@ -43,11 +42,9 @@ class EProcess:
         return len(self._values)
 
     def append(self, values: np.ndarray):
-        # TODO check non-negative
         self._values = np.append(self._values, values)
 
     def append_at(self, values: np.ndarray, start: int):
-        # TODO check non-negative
         assert start <= len(self._values), f"Index {start} out of bounds for EProcess with shape {self._values.shape}"
         assert len(values) + start >= len(self._values), f"Not enough values to append at index {start}"
         self._values[start:] = values[:len(self._values) - start]
@@ -74,7 +71,7 @@ class EProcess:
 
 class Combiner(ABC):
     """
-    A class for combiner a series of stochastic processes into a single process
+    A class for combining a set of stochastic processes into a single process. Calculates increments (on a log scale) for the combined single process.
 
     Attributes:
     history: np.ndarray
@@ -84,7 +81,7 @@ class Combiner(ABC):
 
     Methods:
     __call__(values: np.ndarray) -> float:
-        Objects of this class are callable. Given an array of values, it composes them into a single value
+        Objects of this class are callable. Given an array of values, it composes them into a single value, which is the log-increment for the combined process.
     history_append(values: np.ndarray) -> None:
         Appends the given values to the history
     set_history(values: np.ndarray) -> None:
@@ -101,16 +98,13 @@ class Combiner(ABC):
 
     def __call__(self, values: np.ndarray) -> float:
         """
-        Composes the 2D array of values into an array of values of the same length
+        Composes the input 1D array of values into a single value
         """
         if self.history is None:
-            self.history_append(values)
-            return 0
-        else:
-            increments = values - self.history[-1]
-            combination = self.operate(values, increments)
-            self.history_append(values)
-            return combination
+            self.history_append(np.zeros((len(values))))  # for setting equal weights to everything
+        combination = self.operate(values)
+        self.history_append(values)
+        return combination
 
     def history_append(self, values: np.ndarray):
         if self.history is None:
@@ -127,25 +121,54 @@ class Combiner(ABC):
         return max(0, start - self.history_length)
 
     @abstractmethod
-    def operate(self, values: np.ndarray, increments: np.ndarray) -> float:
+    def operate(self, values: np.ndarray) -> float:
+        # values[i] is [eproc1[i], eproc2[i], ...]
         pass
 
 
 class Minimum(Combiner):
-    def operate(self, values: np.ndarray, increments: np.ndarray) -> float:
-        # values[i] is [eproc1[i], eproc2[i], ...]
-        return np.min(values, axis=0)
+    def operate(self, values: np.ndarray) -> float:
+        return np.min(values) - np.min(self.history[-1])
+
+
+class MinOfRunningMax(Combiner):
+    def __init__(self, history_length: int = 1):
+        self.running_max = None
+        super().__init__(history_length)
+
+    def __call__(self, values: np.ndarray) -> float:
+        if self.running_max is None:
+            self.running_max = np.zeros((len(values)))  # implicit starting value of log(1) for all child e-processes
+        #super().__call__(values)
+        combination = self.operate(values)
+        return combination
+
+    def running_max_update(self, values: np.ndarray):
+        assert self.running_max is not None
+        self.running_max = np.maximum(self.running_max, values)
+
+    def operate(self, values: np.ndarray) -> float:
+        min_running_max_old = np.min(self.running_max, axis=0)  # previous value
+        self.running_max_update(values)
+        min_running_max_new = np.min(self.running_max, axis=0)  # current value
+        return min_running_max_new - min_running_max_old  # return current value as an increment
 
 
 class Linear(Combiner):
-    def operate(self, values: np.ndarray, increments: np.ndarray) -> float:
+    def operate(self, values: np.ndarray) -> float:
         # print(self.history[-1], increments)
         # print(increments + self.history[-1])
         # print(logsumexp(increments + self.history[-1]))
         # print(logsumexp(self.history[-1]))
         # print(logsumexp(increments + self.history[-1]) - logsumexp(self.history[-1]))
         # print(f" --- {self.history[-1]} + {increments} = {increments + self.history[-1]}")
-        return logsumexp(increments + self.history[-1]) - logsumexp(self.history[-1])
+        return logsumexp(values) - logsumexp(self.history[-1])
+
+
+class Quadratic(Combiner):
+    def operate(self, values: np.ndarray) -> float:
+        increments = values - self.history[-1]
+        return logsumexp(increments + (self.history[-1])**2) - logsumexp((self.history[-1])**2)
 
 
 # class NodeStatus(Enum):
@@ -215,7 +238,7 @@ class CompositeNode(Node):
     children: list[Node] = None
     logic: CompositeLogic = CompositeLogic.AND
     combiner: Combiner = Minimum()
-    margin: float = None
+    margin: float = None  # TODO: should all Nodes have a margin field?
 
     def __getitem__(self, item: int | slice):
         if isinstance(item, slice):
@@ -235,6 +258,8 @@ class CompositeNode(Node):
         """
         Combines the values of children processes into a single process for indices start <= i < end
         """
+        assert start >= 0
+
         hist_start = self.combiner.get_start_with_history(start)
         hist_len = start - hist_start
 
@@ -242,16 +267,20 @@ class CompositeNode(Node):
         transposed = np.stack([child[hist_start:end] for child in self.children], axis=1)
 
         # set the history of the combiner
+        # TODO: what is this for? is it necessary?
         self.combiner.set_history(transposed[:hist_len])
 
         # remove the history
         transposed = transposed[self.combiner.history_length:]
 
         # combine the values and bets
+        # TODO: need to check that we are doing the minimum of the running max (for our default combiner)
         increments = np.array(list(map(self.combiner, transposed)))
 
         # append the values to the process
-        values = np.cumsum(increments) + self.eprocess[start-1]
+        values = np.cumsum(increments)
+        if start > 0:
+            values = values + self.eprocess[start-1]
         self.eprocess.append_at(values, start)
 
     # def set_margin_from_cvrs(self, audit: Audit, cvrs: list):
@@ -301,12 +330,12 @@ class NodeRegistry:
     def get_leaf_node(self, ident) -> tuple[Node, bool]:
         if ident in self.nodes:
             if isinstance(self.nodes[ident], LeafNode):
-                return self.nodes[ident], False
+                return self.nodes[ident], False  # "False" means we didn't create a new LeafNode; TODO: switch the bool?
             else:
                 raise ValueError(f"Node {ident} already exists as a composite node")
         else:
             self.nodes[ident] = LeafNode(ident)
-            return self.nodes[ident], True
+            return self.nodes[ident], True  # "True" means we created a new LeafNode
 
     def set_root(self, root: Node):
         self.root = root
@@ -324,7 +353,8 @@ class NodeRegistry:
 #
 
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
+if False:
     eproc1 = EProcess(np.array([0, -1.75073322065061, -2.32966210331461, -2.4687480351667, -2.08241577969098,
                                 -1.56554184160148, -1.04753438222735, -1.22482110067968, -2.33378315213113,
                                 -1.91927664645909, -2.0279242996295, -2.08021631576895, -3.92701680958911,
