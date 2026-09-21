@@ -25,7 +25,7 @@ class NonnegMean:
             Kaplan-Kolmogorov (with and without replacement)
             Kaplan-Markov (without replacement)
             Kaplan-Wald (without replacement)
-            Wald SPRT (with and with replacement)
+            Wald SPRT (with and without replacement)
             ALPHA supermartingale test (with and without replacement)
             Betting martingale tests (with and without replacement)
     Some tests work for all nonnegative populations; others require a finite upper bound `u`.
