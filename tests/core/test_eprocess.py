@@ -187,6 +187,17 @@ class TestMinimumCombiner:
         assert results[1] == pytest.approx(-0.5)
         assert results[2] == pytest.approx(1.0)
 
+    def test_minimum_example_from_script(self):
+        """Regression test for the example values in the sample script."""
+        a1 = np.array([1, 3, 2])
+        a2 = np.array([2, 6, 1])
+        aa = np.stack([a1, a2], axis=1)
+
+        combiner = Minimum()
+        results = [combiner(row) for row in aa]
+
+        np.testing.assert_allclose(results, [1.0, 2.0, -2.0])
+
     def test_minimum_returns_float(self):
         """Test that minimum returns a float, not array"""
         combiner = Minimum()
@@ -225,6 +236,17 @@ class TestMinOfRunningMaxCombiner:
         assert results[0] == pytest.approx(1.0)
         assert results[1] == pytest.approx(0.0)
         assert results[2] == pytest.approx(1.0)
+
+    def test_min_of_running_max_example_from_script(self):
+        """Regression test for the running-max example in the sample script."""
+        a1 = np.array([1, 3, 2])
+        a2 = np.array([2, 6, 1])
+        aa = np.stack([a1, a2], axis=1)
+
+        combiner = MinOfRunningMax()
+        results = [combiner(row) for row in aa]
+
+        np.testing.assert_allclose(results, [1.0, 2.0, 0.0])
 
     def test_min_of_running_max_tracks_max(self):
         """Test that running_max correctly tracks maximums"""
@@ -280,6 +302,24 @@ class TestLinearCombiner:
         result3 = combiner(values_seq[2])
         assert result3 == pytest.approx(logsumexp(values_seq[2]) - logsumexp(values_seq[1]))
 
+    def test_linear_example_from_script(self):
+        """Regression test covering the script's sample shape and behavior."""
+        from scipy.special import logsumexp
+
+        a1 = np.array([1, 3, 2])
+        a2 = np.array([2, 6, 1])
+        aa = np.stack([a1, a2], axis=1)
+
+        combiner = Linear()
+        expected = []
+        prev = np.array([0.0, 0.0])
+        for row in aa:
+            expected.append(logsumexp(row) - logsumexp(prev))
+            prev = row
+
+        actual = [combiner(row) for row in aa]
+        np.testing.assert_allclose(actual, expected)
+
     def test_linear_returns_float(self):
         """Test that Linear returns a float"""
         combiner = Linear()
@@ -325,6 +365,25 @@ class TestQuadraticCombiner:
         incr = values_seq[1] - prev
         expected2 = logsumexp(incr + prev**2) - logsumexp(prev**2)
         assert result2 == pytest.approx(expected2)
+
+    def test_quadratic_example_from_script(self):
+        """Regression test covering the sample script's quadratic input."""
+        from scipy.special import logsumexp
+
+        a1 = np.array([1, 3, 2])
+        a2 = np.array([2, 6, 1])
+        aa = np.stack([a1, a2], axis=1)
+
+        combiner = Quadratic()
+        expected = []
+        prev = np.array([0.0, 0.0])
+        for row in aa:
+            increments = row - prev
+            expected.append(logsumexp(increments + prev**2) - logsumexp(prev**2))
+            prev = row
+
+        actual = [combiner(row) for row in aa]
+        np.testing.assert_allclose(actual, expected)
 
     def test_quadratic_returns_float(self):
         """Test that Quadratic returns a float"""
