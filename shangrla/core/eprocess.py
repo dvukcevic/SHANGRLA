@@ -5,17 +5,19 @@ from typing import Callable
 import numpy as np
 from scipy.special import logsumexp
 
-from shangrla.core.Audit import Audit
+#from shangrla.core.Audit import Audit
 
 
 @dataclass
 class EProcess:
     """
-    A class representing a stochastic process with a time series of values
+    A class representing a stochastic process with a time series of values on a log scale.
 
     Attributes:
     _values: np.ndarray
         The time series of values, on a log scale.
+    running_max: float
+        The maximum value seen so far in the time series.
 
     Methods:
     __getitem__(item: int) -> float:
@@ -27,10 +29,20 @@ class EProcess:
     append_at(values: np.ndarray, start: int) -> None:
         Appends the given values to the time series starting at the given index.
         Requires that the number of values to append is at least as long as the time series minus the start index
+    p_history() -> np.ndarray:
+        Returns the history of p-values for the process
+    p_value() -> float:
+        Returns the latest p-value for the process
+    min_p_value() -> float:
+        Returns the minimum p-value seen so far (based on running_max)
     """
     _values: np.ndarray = field(default_factory=lambda: np.array([]))
     running_max: float = -np.inf
-    # TODO: running_max is never updated?
+
+    def __post_init__(self):
+        """Update running_max after initialization."""
+        if len(self._values) > 0:
+            self.running_max = np.max(self._values)
 
     def __getitem__(self, item):
         try:
@@ -42,71 +54,134 @@ class EProcess:
         return len(self._values)
 
     def append(self, values: np.ndarray):
+        """
+        Appends the given values to the end of the time series and updates running_max.
+        
+        Args:
+            values: np.ndarray - Values to append
+        """
+        values = np.asarray(values)
+        if values.size == 0:
+            return
+
         self._values = np.append(self._values, values)
+        self.running_max = max(self.running_max, np.max(values))
 
     def append_at(self, values: np.ndarray, start: int):
-        assert start <= len(self._values), f"Index {start} out of bounds for EProcess with shape {self._values.shape}"
-        assert len(values) + start >= len(self._values), f"Not enough values to append at index {start}"
-        self._values[start:] = values[:len(self._values) - start]
-        self.append(values[len(self._values) - start:])
+        """
+        Appends the given values to the time series starting at the given index.
+        Requires that the number of values to append is at least as long as the time series minus the start index.
+        
+        Args:
+            values: np.ndarray - Values to append
+            start: int - Starting index for the append
+            
+        Raises:
+            ValueError: If start is out of bounds or there aren't enough values to append
+        """
+        values = np.asarray(values)
+
+        if start > len(self._values):
+            raise ValueError(f"Index {start} out of bounds for EProcess with shape {self._values.shape}")
+        if len(values) + start < len(self._values):
+            raise ValueError(f"Not enough values to append at index {start}: need at least {len(self._values) - start} values, got {len(values)}")
+        
+        required = len(self._values) - start
+        self._values[start:] = values[:required]
+
+        remainder = values[required:]
+        if remainder.size > 0:
+            self._values = np.append(self._values, remainder)
+
+        # append_at can replace the previous maximum, so recompute it from
+        # the complete updated process rather than only considering a suffix.
+        self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
 
     def p_history(self):
         """
-        Returns the history of p-values for the process
+        Returns the history of p-values for the process.
+        
+        Returns:
+            np.ndarray: The p-value history (1 / exp(values))
         """
-        return 1/np.exp(self._values)
+        return 1 / np.exp(self._values)
 
     def p_value(self):
         """
-        Returns the latest p-value for the process
+        Returns the latest p-value for the process.
+        
+        Returns:
+            float: The current p-value
         """
-        return 1/np.exp(self._values[-1])
+        if len(self._values) == 0:
+            raise ValueError("Cannot get p_value of empty EProcess")
+        return 1 / np.exp(self._values[-1])
 
     def min_p_value(self):
         """
-        Returns the running minimum p-value for the process
+        Returns the minimum p-value seen so far (based on running_max).
+        
+        Returns:
+            float: The minimum p-value
         """
-        return 1/np.exp(self.running_max)
+        if self.running_max == -np.inf:
+            raise ValueError("No values have been added to this EProcess yet")
+        return 1 / np.exp(self.running_max)
 
 
 class Combiner(ABC):
     """
-    A class for combining a set of stochastic processes into a single process. Calculates increments (on a log scale) for the combined single process.
+    A class for combining a set of stochastic processes into a single process.
+    Calculates increments (on a log scale) for the combined single process.
 
     Attributes:
     history: np.ndarray
-        The history of values of the composed process
+        The history of values of the composed process (stores previous timestep values)
     history_length: int
-        The length of the history to keep
+        The length of the history to keep (currently only 1 is used)
 
     Methods:
     __call__(values: np.ndarray) -> float:
-        Objects of this class are callable. Given an array of values, it composes them into a single value, which is the log-increment for the combined process.
+        Objects of this class are callable. Given an array of values, it composes them into a single value,
+        which is the log-increment for the combined process.
     history_append(values: np.ndarray) -> None:
         Appends the given values to the history
     set_history(values: np.ndarray) -> None:
         Sets the history to the given values
-    operate(values: np.ndarray, increments: np.ndarray) -> float:
-        Abstract method that must be implemented by subclasses. Given the values and the increments, it returns a
-        single value
+    operate(values: np.ndarray) -> float:
+        Abstract method that must be implemented by subclasses. Given the values, it returns
+        a single scalar value representing the log-increment.
     """
     def __init__(self, history_length: int = 1):
-        self.history = None
         if history_length < 0:
             raise ValueError("history_length must be non-negative")
+        self.history = None
         self.history_length = history_length  # non-negative
 
     def __call__(self, values: np.ndarray) -> float:
         """
-        Composes the input 1D array of values into a single value
+        Composes the input 1D array of values into a single scalar value.
+        
+        Args:
+            values: np.ndarray - Array of values from child e-processes
+            
+        Returns:
+            float: The combined log-increment
         """
         if self.history is None:
-            self.history_append(np.zeros((len(values))))  # for setting equal weights to everything
+            # Initialize with zeros for equal weights
+            self.history_append(np.zeros(len(values)))
         combination = self.operate(values)
         self.history_append(values)
         return combination
 
     def history_append(self, values: np.ndarray):
+        """
+        Appends the given values to the history, maintaining a maximum length.
+        
+        Args:
+            values: np.ndarray - Values to append to history
+        """
         if self.history is None:
             self.history = np.array([values])
         else:
@@ -115,60 +190,147 @@ class Combiner(ABC):
                 self.history = self.history[-self.history_length:]
 
     def set_history(self, values: np.ndarray):
+        """
+        Sets the history to the given values.
+        
+        Args:
+            values: np.ndarray - Values to set as history (will be truncated to history_length)
+        """
         self.history = values[:self.history_length]
 
     def get_start_with_history(self, start: int) -> int:
+        """
+        Gets the starting index accounting for history needed by the combiner.
+        
+        Args:
+            start: int - The intended start index
+            
+        Returns:
+            int: The adjusted start index (may be earlier to account for history)
+        """
         return max(0, start - self.history_length)
 
     @abstractmethod
     def operate(self, values: np.ndarray) -> float:
+        """
+        Abstract method to compute the log-increment from the given values.
+        
+        Args:
+            values: np.ndarray - Array of values from child e-processes at this timestep
+            
+        Returns:
+            float: The combined log-increment
+        """
         # values[i] is [eproc1[i], eproc2[i], ...]
         pass
 
 
 class Minimum(Combiner):
+    """
+    Combiner that takes the minimum value across child processes.
+    Computes the increment as: min(current_values) - min(previous_values)
+    """
     def operate(self, values: np.ndarray) -> float:
-        return np.min(values) - np.min(self.history[-1])
+        """
+        Returns the increment in the minimum value.
+        
+        Args:
+            values: np.ndarray - Current values from child processes
+            
+        Returns:
+            float: Increment in minimum
+        """
+        return float(np.min(values) - np.min(self.history[-1]))
 
 
 class MinOfRunningMax(Combiner):
+    """
+    Combiner that tracks the running maximum of each child process,
+    then takes the minimum across those maxima.
+    """
     def __init__(self, history_length: int = 1):
-        self.running_max = None
         super().__init__(history_length)
+        self.running_max = None
 
     def __call__(self, values: np.ndarray) -> float:
+        """
+        Computes the increment for this timestep.
+        Initializes running_max on first call.
+        
+        Args:
+            values: np.ndarray - Current values from child processes
+            
+        Returns:
+            float: The log-increment
+        """
         if self.running_max is None:
-            self.running_max = np.zeros((len(values)))  # implicit starting value of log(1) for all child e-processes
-        #super().__call__(values)
+            # Initialize: implicit starting value of log(1) = 0 for all child e-processes
+            self.running_max = np.zeros(len(values))
         combination = self.operate(values)
         return combination
 
     def running_max_update(self, values: np.ndarray):
-        assert self.running_max is not None
+        """
+        Updates the running maximum with new values.
+        
+        Args:
+            values: np.ndarray - New values to consider
+        """
+        if self.running_max is None:
+            raise ValueError("running_max not initialized")
         self.running_max = np.maximum(self.running_max, values)
 
     def operate(self, values: np.ndarray) -> float:
-        min_running_max_old = np.min(self.running_max, axis=0)  # previous value
+        """
+        Returns the increment in the minimum of the running maxima.
+        
+        Args:
+            values: np.ndarray - Current values from child processes
+            
+        Returns:
+            float: Increment in minimum of running maxima
+        """
+        min_running_max_old = np.min(self.running_max)  # previous value
         self.running_max_update(values)
-        min_running_max_new = np.min(self.running_max, axis=0)  # current value
-        return min_running_max_new - min_running_max_old  # return current value as an increment
+        min_running_max_new = np.min(self.running_max)  # current value
+        return float(min_running_max_new - min_running_max_old)
 
 
 class Linear(Combiner):
+    """
+    Combiner that uses log-sum-exp for a linear combination of processes.
+    Computes the increment as: logsumexp(values) - logsumexp(previous_values)
+    """
     def operate(self, values: np.ndarray) -> float:
-        # print(self.history[-1], increments)
-        # print(increments + self.history[-1])
-        # print(logsumexp(increments + self.history[-1]))
-        # print(logsumexp(self.history[-1]))
-        # print(logsumexp(increments + self.history[-1]) - logsumexp(self.history[-1]))
-        # print(f" --- {self.history[-1]} + {increments} = {increments + self.history[-1]}")
-        return logsumexp(values) - logsumexp(self.history[-1])
+        """
+        Returns the increment using log-sum-exp.
+        
+        Args:
+            values: np.ndarray - Current values from child processes
+            
+        Returns:
+            float: Log-sum-exp increment
+        """
+        return float(logsumexp(values) - logsumexp(self.history[-1]))
 
 
 class Quadratic(Combiner):
+    """
+    Combiner that uses log-sum-exp with quadratic weighting.
+    Computes the increment as: logsumexp(increments + prev^2) - logsumexp(prev^2)
+    """
     def operate(self, values: np.ndarray) -> float:
+        """
+        Returns the increment using log-sum-exp with quadratic weighting.
+        
+        Args:
+            values: np.ndarray - Current values from child processes
+            
+        Returns:
+            float: Quadratic-weighted increment
+        """
         increments = values - self.history[-1]
-        return logsumexp(increments + (self.history[-1])**2) - logsumexp((self.history[-1])**2)
+        return float(logsumexp(increments + (self.history[-1])**2) - logsumexp((self.history[-1])**2))
 
 
 # class NodeStatus(Enum):
