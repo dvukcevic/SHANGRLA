@@ -127,6 +127,21 @@ class EProcess:
         # the complete updated process rather than only considering a suffix.
         self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
 
+    def _replace_range(self, values: np.ndarray, start: int):
+        """Replace an existing range without changing the process length."""
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
+        if not isinstance(start, (int, np.integer)) or isinstance(start, bool):
+            raise TypeError("start must be an integer")
+        start = int(start)
+        if start < 0 or start + len(values) > len(self._values):
+            raise ValueError("Replacement range must fit within the existing EProcess")
+        if not np.all(np.isfinite(values)):
+            raise ValueError("EProcess values must contain only finite numbers")
+        self._values[start:start + len(values)] = values
+        self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
+
     def p_history(self):
         """Return the p-values corresponding to the stored log-values (1/exp(values))."""
         return 1 / np.exp(self._values)
@@ -178,6 +193,11 @@ class Combiner(ABC):
         self.history: Optional[np.ndarray] = None
         self.history_length = history_length
         self._prev_values: Optional[np.ndarray] = None
+
+    def reset(self):
+        """Clear state so the combiner can be recomputed from the beginning."""
+        self.history = None
+        self._prev_values = None
 
     def __call__(self, values: np.ndarray) -> float:
         """Compute the combiner's increment for a row of `values`, maintaining history.
@@ -310,6 +330,10 @@ class MinOfRunningMax(Combiner):
         super().__init__(history_length)
         self.running_max: Optional[np.ndarray] = None
 
+    def reset(self):
+        super().reset()
+        self.running_max = None
+
     def __call__(self, values: np.ndarray) -> float:
         if self.running_max is None:
             # Start from implicit zero log-value for each child
@@ -370,17 +394,33 @@ class Quadratic(Combiner):
 class Largest(Combiner):
     """Combiner that follows the largest previous-weighted child.
 
-    It selects the index of the maximum value in the previous-history row and
-    returns the increment for that index (values[k] - prev[k]). Ties are broken by
-    first occurrence due to numpy.argmax semantics.
+    It selects the largest current value on the first row, then the index of the
+    maximum value in the previous-history row. It returns that index's increment
+    (values[k] - prev[k]); ties are broken by first occurrence.
 
     This is a winner-takes-most transition: a single child is selected based on
     the previous row and the increment for that child is propagated forward.
     """
 
+    def __init__(self, history_length: int = 1):
+        super().__init__(history_length)
+        self._has_observed_values = False
+        self._select_current = False
+
+    def reset(self):
+        super().reset()
+        self._has_observed_values = False
+        self._select_current = False
+
+    def __call__(self, values: np.ndarray) -> float:
+        self._select_current = not self._has_observed_values and self.history is None
+        result = super().__call__(values)
+        self._has_observed_values = True
+        return result
+
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
-        k = int(np.argmax(prev))
+        k = int(np.argmax(values if self._select_current else prev))
         increments = values - prev
         return float(increments[k])
 
@@ -396,7 +436,7 @@ class Node(ABC):
 
     id: str
     eprocess: EProcess = field(default_factory=lambda: EProcess())
-    parents: Optional[List['CompositeNode']] = None
+    parents: List['CompositeNode'] = field(default_factory=list)
 
     def _add_parent(self, parent: 'CompositeNode'):
         """Register a parent composite node (idempotent)."""
@@ -529,6 +569,9 @@ class CompositeNode(Node):
         if end <= start:
             return
 
+        if start == 0:
+            self.combiner.reset()
+
         hist_start = self.combiner.get_start_with_history(start)
         hist_len = start - hist_start
 
@@ -552,7 +595,10 @@ class CompositeNode(Node):
         values = np.cumsum(increments)
         if start > 0 and len(self.eprocess) >= start:
             values = values + self.eprocess[start - 1]
-        self.eprocess.append_at(values, start)
+        if end < len(self.eprocess):
+            self.eprocess._replace_range(values, start)
+        else:
+            self.eprocess.append_at(values, start)
 
 
 class NodeRegistry:
