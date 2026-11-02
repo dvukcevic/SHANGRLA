@@ -1,3 +1,18 @@
+"""E-process composition primitives.
+
+This module models a log-scale stochastic process and the composition of multiple
+child processes into a single aggregate process. The stored values are log-scale
+values, not probabilities; p-values are therefore computed as exp(-value) when
+needed.
+
+The implementation is intentionally stateful:
+- ``EProcess`` stores the running maximum for the minimum p-value calculation.
+- ``Combiner`` instances maintain a short history of previous rows so that
+  incremental updates can be reconciled with a full recomputation.
+- ``CompositeNode`` can recompute only a suffix of the tree while preserving the
+  same semantics as a full recomputation.
+"""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Callable, Optional, List
@@ -52,11 +67,15 @@ class EProcess:
         values : np.ndarray
             Values to append (will be converted to numpy array).
         """
-        values = np.asarray(values)
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
         if values.size == 0:
             return
+        if not np.all(np.isfinite(values)):
+            raise ValueError("EProcess values must contain only finite numbers")
         self._values = np.append(self._values, values)
-        self.running_max = max(self.running_max, np.max(values))
+        self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
 
     def append_at(self, values: np.ndarray, start: int):
         """Replace the suffix of the time series starting at `start` with the provided
@@ -77,7 +96,16 @@ class EProcess:
         ValueError
             If `start` is out of bounds or `values` is too short to cover the existing suffix.
         """
-        values = np.asarray(values)
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
+        if not isinstance(start, (int, np.integer)) or isinstance(start, bool):
+            raise TypeError("start must be an integer")
+        start = int(start)
+        if start < 0:
+            raise ValueError("start must be non-negative")
+        if not np.all(np.isfinite(values)):
+            raise ValueError("EProcess values must contain only finite numbers")
 
         if start > len(self._values):
             raise ValueError(f"Index {start} out of bounds for EProcess with shape {self._values.shape}")
@@ -136,6 +164,12 @@ class Combiner(ABC):
     Subclasses must implement operate(values: np.ndarray) -> float which computes the
     log-increment for a single timestep. The Combiner class manages history rows used
     by some combiners.
+
+    Semantic note:
+    The implicit baseline for a new process is the zero vector, which corresponds to
+    log(1) = 0. For a history-aware combiner, the previous rows are seeded from the
+    relevant prefix so that recomputing a suffix preserves the same cumulative values
+    as a full recomputation from the start of the process.
     """
 
     def __init__(self, history_length: int = 1):
@@ -143,6 +177,7 @@ class Combiner(ABC):
             raise ValueError("history_length must be non-negative")
         self.history: Optional[np.ndarray] = None
         self.history_length = history_length
+        self._prev_values: Optional[np.ndarray] = None
 
     def __call__(self, values: np.ndarray) -> float:
         """Compute the combiner's increment for a row of `values`, maintaining history.
@@ -150,25 +185,84 @@ class Combiner(ABC):
         If history is uninitialized, it is seeded with a zero vector of the appropriate
         length (this represents an implicit starting state of log(1) = 0 for each child).
         """
-        if self.history is None:
-            # Initialize with zeros for equal weights
-            self.history_append(np.zeros(len(values)))
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Combiner values must contain only finite numbers")
+        if self.history_length == 0:
+            self.history = None
+            self._prev_values = np.zeros(len(values), dtype=float)
+        else:
+            if self.history is None:
+                self.history = np.zeros((1, len(values)), dtype=float)
+            elif self.history.shape[1] != len(values):
+                raise ValueError(
+                    f"Combiner history has length {self.history.shape[1]} but received values of length {len(values)}"
+                )
+            self._prev_values = np.asarray(self.history[-1], dtype=float)
+
+        if self._prev_values is not None and self._prev_values.shape != values.shape:
+            raise ValueError(
+                f"Previous values have shape {self._prev_values.shape} but current values have shape {values.shape}"
+            )
+
         combination = self.operate(values)
         self.history_append(values)
         return combination
 
     def history_append(self, values: np.ndarray):
         """Append a row to the history buffer (truncate to history_length)."""
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Combiner history values must contain only finite numbers")
+        if self.history_length == 0:
+            self.history = None
+            self._prev_values = np.zeros(len(values), dtype=float)
+            return
+
+        if self.history is not None and self.history.shape[1] != len(values):
+            raise ValueError(
+                f"History width mismatch: existing history has {self.history.shape[1]} columns but received {len(values)}"
+            )
+
         if self.history is None:
-            self.history = np.array([values])
+            self.history = np.array([values], dtype=float)
         else:
             self.history = np.append(self.history, [values], axis=0)
             if len(self.history) > self.history_length:
                 self.history = self.history[-self.history_length:]
 
+        self._prev_values = np.asarray(self.history[-1], dtype=float)
+
     def set_history(self, values: np.ndarray):
         """Set the history buffer explicitly (values will be truncated to history_length)."""
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 0:
+            values = values.reshape(1)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("History values must contain only finite numbers")
+        if self.history_length == 0:
+            self.history = None
+            if values.ndim == 0:
+                self._prev_values = np.zeros(0, dtype=float)
+            elif values.ndim == 1:
+                self._prev_values = np.zeros(len(values), dtype=float)
+            else:
+                self._prev_values = np.zeros(values.shape[1], dtype=float)
+            return
+        if values.size == 0:
+            self.history = None
+            self._prev_values = None
+            return
+        if values.ndim == 1:
+            values = values.reshape(1, -1)
+        elif values.ndim != 2:
+            raise ValueError("History values must be a 1-D or 2-D array")
         self.history = values[: self.history_length]
+        self._prev_values = np.asarray(self.history[-1], dtype=float) if len(self.history) > 0 else None
 
     def get_start_with_history(self, start: int) -> int:
         """Return an adjusted start index that includes any previous rows required by history."""
@@ -190,16 +284,26 @@ class Combiner(ABC):
 class Minimum(Combiner):
     """Combiner that takes the minimum across child values.
 
-    The increment is computed as: min(current_values) - min(previous_values)
+    The increment is computed as: min(current_values) - min(previous_values).
+
+    This is the baseline combiner for many e-process compositions, and it defines
+    the minimum across child log-values at each time. The implicit previous state
+    is the zero vector, equivalent to log(1) = 0 for each child.
     """
 
     def operate(self, values: np.ndarray) -> float:
-        return float(np.min(values) - np.min(self.history[-1]))
+        prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
+        return float(np.min(values) - np.min(prev))
 
 
 class MinOfRunningMax(Combiner):
     """Combiner that tracks a running maximum for each child and returns the
     increment in the minimum across those running maxima.
+
+    At each step we update the per-child running maxima and compare the minimum of
+    the new maxima against the minimum of the previous maxima. This is equivalent
+    to tracking the strongest child evidence seen so far for each dimension and
+    asking how the minimum of those maxima has changed.
     """
 
     def __init__(self, history_length: int = 1):
@@ -210,7 +314,7 @@ class MinOfRunningMax(Combiner):
         if self.running_max is None:
             # Start from implicit zero log-value for each child
             self.running_max = np.zeros(len(values))
-        return self.operate(values)
+        return super().__call__(values)
 
     def running_max_update(self, values: np.ndarray):
         """Update the per-child running maximums with the provided values.
@@ -234,11 +338,16 @@ class MinOfRunningMax(Combiner):
 class Linear(Combiner):
     """Combiner that uses log-sum-exp to combine child log-values.
 
-    The increment is: logsumexp(values) - logsumexp(previous_values)
+    The increment is: logsumexp(values) - logsumexp(previous_values).
+
+    This is the additive log-sum-exp analogue of a linear combination over the
+    child log-values. The previous row is the most recent history state; when no
+    history is available, the implicit previous state is the zero vector.
     """
 
     def operate(self, values: np.ndarray) -> float:
-        return float(logsumexp(values) - logsumexp(self.history[-1]))
+        prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
+        return float(logsumexp(values) - logsumexp(prev))
 
 
 class Quadratic(Combiner):
@@ -246,11 +355,16 @@ class Quadratic(Combiner):
 
     The increment is: logsumexp(increments + prev^2) - logsumexp(prev^2)
     where increments = values - previous_values.
+
+    This preserves a quadratic form in the previous state, so the effective
+    exponentiation weight is based on the previous child values rather than the
+    current row alone.
     """
 
     def operate(self, values: np.ndarray) -> float:
-        increments = values - self.history[-1]
-        return float(logsumexp(increments + (self.history[-1]) ** 2) - logsumexp((self.history[-1]) ** 2))
+        prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
+        increments = values - prev
+        return float(logsumexp(increments + (prev) ** 2) - logsumexp((prev) ** 2))
 
 
 class Largest(Combiner):
@@ -259,10 +373,13 @@ class Largest(Combiner):
     It selects the index of the maximum value in the previous-history row and
     returns the increment for that index (values[k] - prev[k]). Ties are broken by
     first occurrence due to numpy.argmax semantics.
+
+    This is a winner-takes-most transition: a single child is selected based on
+    the previous row and the increment for that child is propagated forward.
     """
 
     def operate(self, values: np.ndarray) -> float:
-        prev = self.history[-1]
+        prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
         k = int(np.argmax(prev))
         increments = values - prev
         return float(increments[k])
@@ -295,10 +412,16 @@ class Node(ABC):
 
     def get_p_value(self):
         """Return the p-value corresponding to the most recent log-value in the eprocess."""
+        if len(self.eprocess) == 0:
+            raise ValueError(f"{type(self).__name__} has no values")
         return 1 / np.exp(self.eprocess[-1])
 
     def get_min_p_value(self):
         """Return the minimum p-value observed for this node (from running_max)."""
+        if len(self.eprocess) == 0:
+            raise ValueError(f"{type(self).__name__} has no values")
+        if self.eprocess.running_max == -np.inf:
+            raise ValueError(f"{type(self).__name__} has no values")
         return 1 / np.exp(self.eprocess.running_max)
 
     def __len__(self):
@@ -332,6 +455,12 @@ class CompositeNode(Node):
         The combiner instance used to collapse child values into a single increment.
     margin : Optional[float]
         Optional margin value (application-specific; may be set later).
+
+    Public contract:
+    The composition tree is defined by child values indexed by time. Calling
+    ``combine(start, end)`` computes the aggregate log-values for the requested
+    suffix while preserving the same semantics as a full tree recomputation when
+    the requested window includes all relevant history rows.
     """
 
     children: List[Node] = field(default_factory=list)
@@ -382,6 +511,12 @@ class CompositeNode(Node):
 
         The method is defensive: it handles missing children, empty ranges, and
         respects the combiner's history_length when slicing child values.
+
+        Semantics:
+        - history rows that precede `start` are fed to the combiner explicitly so
+          that recomputation of a suffix is consistent with a full recomputation;
+        - the remaining rows are then processed in order and appended back into the
+          composite at the requested offset.
         """
         assert start >= 0
         if not self.children:
@@ -405,11 +540,9 @@ class CompositeNode(Node):
         if hist_len > 0:
             self.combiner.set_history(transposed[:hist_len])
 
-        # remove the history rows before applying the combiner
-        if self.combiner.history_length > 0:
-            transposed_work = transposed[self.combiner.history_length :]
-        else:
-            transposed_work = transposed
+        # Remove only the rows we already seeded into history. The remaining rows
+        # are the ones that should be processed by the combiner at this offset.
+        transposed_work = transposed[hist_len:]
 
         if transposed_work.size == 0:
             return
@@ -427,6 +560,13 @@ class NodeRegistry:
 
     Provides convenience methods for creating leaf and composite nodes and
     ensures consistency when replacing existing nodes.
+
+    Usage contract:
+    1. Use ``create_leaf`` and ``create_composite`` to establish a tree.
+    2. Keep node identities stable across updates; replacing a node detaches it
+       from any old parent links.
+    3. Composite nodes are the stable anchor for recomputation; leaves represent
+       the data-bearing processes.
     """
 
     def __init__(self):
