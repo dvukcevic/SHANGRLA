@@ -3,7 +3,9 @@ import numpy as np
 import sys
 import pytest
 
-from shangrla.core.Audit import Audit, Assertion, Assorter, Contest, CVR
+from shangrla.core.Audit import Audit
+from shangrla.core.assertion import Assertion, Assorter
+from shangrla.core.contest import Contest, CVR
 from shangrla.core.NonnegMean import NonnegMean
 
 ######################################################################################
@@ -89,7 +91,7 @@ class TestAssertion:
     #what's the right way to write a unit test for this?
     #define a bare-minimum Assertion / Assorter and CVR list and then call margin on them?
     def test_margin(self):
-        assert Assertion.margin(self.raw_AvB_asrtn, self.plur_cvr_list) == 0.5
+        assert self.raw_AvB_asrtn.compute_margin(self.plur_cvr_list) == 0.5
 
     # is it weird that margin calling signature involves cvr_list,
     # but not so for overstatement_assorter_margin

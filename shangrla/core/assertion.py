@@ -33,7 +33,7 @@ class Assertion:
         test: NonnegMean = None,
         estim: callable = None,
         bet: callable = None,
-        test_kwargs: dict = {},
+        test_kwargs: dict = None,
         node: eproc.Node = None,
         # p_value: float = 1,
         # p_history: list = [],
@@ -86,7 +86,7 @@ class Assertion:
         self.test: NonnegMean = test
         self.estim = estim
         self.bet = bet
-        self.test_kwargs = test_kwargs
+        self.test_kwargs = {} if test_kwargs is None else test_kwargs
         self.node = node
         self.proved = proved
         self.sample_size = sample_size
@@ -130,12 +130,16 @@ class Assertion:
         }
 
     def p_value(self):
+        if self.node is None or len(self.node) == 0:
+            return 1.0
         return self.node.get_p_value()
 
     def min_p(self):
+        if self.node is None or len(self.node) == 0:
+            return 1.0
         return self.node.get_min_p_value()
 
-    def margin(self, cvr_list: Collection = None, use_style: bool = True):
+    def compute_margin(self, cvr_list: Collection = None, use_style: bool = True):
         """
         find the margin for a list of Cvrs.
         By definition, the margin is twice the mean of the assorter, minus 1.
@@ -574,17 +578,10 @@ class Assertion:
     def set_p_values(self, mvr_sample: list[CVR], cvr_sample: list[CVR] = None, use_all=False
     ) -> float:
         """
-        Find the p-value for every assertion and update assertions & contests accordingly
-
-        update p_value, p_history, proved flag, the maximum p-value for each contest.
-
-        Primarily about side-effects.
+        Update this assertion's log-evidence history from the supplied sample.
 
         Parameters
         ----------
-        contests: dict of dicts
-            the contest data structure. outer keys are contest identifiers; inner keys are assertions
-
         mvr_sample: list of CVR objects
             the manually ascertained voter intent from sheets, including entries for phantoms
 
@@ -594,38 +591,28 @@ class Assertion:
 
         Returns
         -------
-        p_max: float
-            largest p-value for any assertion in any contest
+        p_value: float
+            current p-value for this assertion
 
-        Side-effects
-        ------------
-        Sets u for every test for every assertion, according to whether the corresponding audit method
-        is Audit.AUDIT_TYPE.CARD_COMPARISON, Audit.AUDIT_TYPE.ONEAUDIT, or Audit.AUDIT_TYPE.POLLING.
-        Sets contest max_p to be the largest P-value of any assertion for that contest
-        Updates p_value, p_history, and proved for every assertion
+        Side effect
+        -----------
+        Replaces the node's log-evidence history and latches ``proved`` once its
+        minimum p-value reaches the contest risk limit.
 
         """
-        if cvr_sample is not None:
-            assert len(mvr_sample) == len(cvr_sample), "unequal numbers of cvrs and mvrs"
-        p_max = 0
+        if cvr_sample is not None and len(mvr_sample) != len(cvr_sample):
+            raise ValueError("unequal numbers of cvrs and mvrs")
+        if self.node is None:
+            raise ValueError("assertion must have a node before setting p-values")
         d, u = self.mvrs_to_data(mvr_sample, cvr_sample, use_all=use_all)
         self.test.u = u  # set upper bound for the test for each assorter
 
-        # TODO: make incremental
-        e_value, e_history = self.test.test(d)  # NOTE: alpha mart is changed to return e-values
-
-        # transform to log scale
-        e_value = np.log(e_value)
-        e_history = np.log(e_history)
-
-        self.node.eprocess.append_at(e_history, 0)
-        # asn.proved = (asn.p_value <= con.risk_limit) or asn.proved
-        # con.p_values.update({a: asn.p_value})
-        # con.proved.update({a: asn.proved})
-        # contest_max_p = np.max([contest_max_p, asn.p_value])
-        # contests[c].max_p = contest_max_p
-        # p_max = np.max([p_max, contests[c].max_p])
-        return e_value
+        _, e_history = self.test.test(d)
+        log_e_history = np.log(np.asarray(e_history, dtype=float))
+        self.node.eprocess.append_at(log_e_history, 0)
+        if self.min_p() <= self.contest.risk_limit:
+            self.proved = True
+        return self.p_value()
 
     @classmethod
     def interleave_values(
@@ -684,17 +671,20 @@ class Assertion:
     @classmethod
     def reset_p_values(cls, contests: dict) -> bool:
         '''
-        Resets the p-values, p_history, and proved for every assertion
+        Resets assertion and composition-tree evidence for every contest.
         '''
-        for c, con in contests.items():
-            con.p_values = {}
-            con.proved = {}
-            for a, asn in con.assertions.items():
-                asn.p_value, asn.p_history = 1, []
-                asn.proved = False
-                con.p_values.update({a: asn.p_value})
-                con.proved.update({a: asn.proved})
-            contests[c].max_p = 1
+        for con in contests.values():
+            handler = con.assertions
+            if isinstance(handler, AssertionHandler):
+                handler.reset_p_values()
+            else:
+                for asn in handler.values():
+                    asn.proved = False
+                    if asn.node is not None:
+                        asn.node.eprocess.reset()
+                con.p_values = {a: 1 for a in handler}
+                con.proved = {a: False for a in handler}
+                con.max_p = 1
         return True
 
 
@@ -833,19 +823,12 @@ class AssertionHandler:
             min_margin = np.min([min_margin, margin])
         return min_margin
 
-    def set_p_values(self, mvr_sample: list, cvr_sample: list = None, use_all=False) -> float:  # TODO Create audit-wide corresponding function
+    def set_p_values(self, mvr_sample: list, cvr_sample: list = None, use_all=False) -> float:
         """
-        Find the p-value for every assertion and update assertions & contests accordingly
-
-        update p_value, p_history, proved flag, the maximum p-value for each contest.
-
-        Primarily about side-effects.
+        Update every assertion, the composed contest process, and contest summaries.
 
         Parameters
         ----------
-        contests: dict of dicts
-            the contest data structure. outer keys are contest identifiers; inner keys are assertions
-
         mvr_sample: list of CVR objects
             the manually ascertained voter intent from sheets, including entries for phantoms
 
@@ -855,50 +838,77 @@ class AssertionHandler:
 
         Returns
         -------
-        p_max: float
-            largest p-value for any assertion in any contest
+        max_p: float
+            largest current p-value among this contest's assertions
 
-        Side-effects
+        Side effects
         ------------
-        Sets u for every test for every assertion, according to whether the corresponding audit method
-        is Audit.AUDIT_TYPE.CARD_COMPARISON, Audit.AUDIT_TYPE.ONEAUDIT, or Audit.AUDIT_TYPE.POLLING.
-        Sets contest max_p to be the largest P-value of any assertion for that contest
-        Updates p_value, p_history, and proved for every assertion
+        Updates each assertion's node history and proof flag, rebuilds the
+        composition tree, and updates ``contest.p_values``, ``contest.proved``,
+        and ``contest.max_p``.
 
         """
-        if cvr_sample is not None:
-            assert len(mvr_sample) == len(cvr_sample), "unequal numbers of cvrs and mvrs"
-        p_max = 0
+        if cvr_sample is not None and len(mvr_sample) != len(cvr_sample):
+            raise ValueError("unequal numbers of cvrs and mvrs")
         self.contest.p_values = {}
         self.contest.proved = {}
-        contest_max_p = 0
+        p_values = {}
+        proved = {}
         for a, asrt in self.assertions.items():
-            asrt.set_p_values(mvr_sample, cvr_sample, use_all=use_all)
+            p_values[a] = asrt.set_p_values(mvr_sample, cvr_sample, use_all=use_all)
+            proved[a] = asrt.proved
 
-            # d, u = asrt.mvrs_to_data(mvr_sample, cvr_sample, use_all=use_all)
-            # asrt.test.u = u  # set upper bound for the test for each assorter
-            # asrt.p_value, asrt.p_history = asrt.test.test(d)
-            # asrt.proved = (asrt.p_value <= self.contest.risk_limit) or asrt.proved
-            # self.contest.p_values.update({a: asrt.p_value})
-            # self.contest.proved.update({a: asrt.proved})
-            # contest_max_p = np.max([contest_max_p, asrt.p_value])
-            # self.contest.max_p = contest_max_p
-            # p_max = np.max([p_max, self.contest.max_p])
-        return p_max
+        self._recompute_composition()
+        self.contest.p_values = p_values
+        self.contest.proved = proved
+        contest_max_p = max(p_values.values(), default=1.0)
+        self.contest.max_p = contest_max_p
+        root_p = self._node_p_value(self.registry.root)
+        if root_p <= self.contest.risk_limit:
+            self.proved = True
+        return contest_max_p
 
-    def reset_p_values(cls, contests: dict) -> bool:
-        '''
-        Resets the p-values, p_history, and proved for every assertion
-        '''
-        for c, con in contests.items():
-            con.p_values = {}
-            con.proved = {}
-            for a, asn in con.assertions.items():
-                asn.p_value, asn.p_history = 1, []
-                asn.proved = False
-                con.p_values.update({a: asn.p_value})
-                con.proved.update({a: asn.proved})
-            contests[c].max_p = 1
+    @staticmethod
+    def _node_p_value(node: eproc.Node) -> float:
+        return 1.0 if len(node) == 0 else node.get_p_value()
+
+    def _recompute_composition(self) -> None:
+        """Rebuild composed processes from the current assertion leaf histories."""
+        visited = set()
+
+        def recompute(node):
+            if not isinstance(node, eproc.CompositeNode) or id(node) in visited:
+                return
+            visited.add(id(node))
+            for child in node.children:
+                recompute(child)
+            node.eprocess.reset()
+            node.combiner.reset()
+            if node.children:
+                end = min(len(child) for child in node.children)
+                if end:
+                    node.combine(start=0, end=end)
+
+        recompute(self.registry.root)
+
+    def reset_p_values(self) -> bool:
+        """Reset assertion evidence, composed histories, and proof status."""
+        for node in self.registry.nodes.values():
+            node.eprocess.reset()
+            if isinstance(node, eproc.CompositeNode):
+                node.combiner.reset()
+        self.registry.root.eprocess.reset()
+        if isinstance(self.registry.root, eproc.CompositeNode):
+            self.registry.root.combiner.reset()
+
+        self.contest.p_values = {}
+        self.contest.proved = {}
+        for assertion_id, assertion in self.assertions.items():
+            assertion.proved = False
+            self.contest.p_values[assertion_id] = 1.0
+            self.contest.proved[assertion_id] = False
+        self.contest.max_p = 1.0
+        self.proved = False
         return True
 
 
@@ -1216,7 +1226,7 @@ def get_assertion_builder(scf: scc.SocialChoiceFunction) -> AssertionBuilder:
 @link_with_scf(scc.Plurality)
 def plurality_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
-    root = reg.get_composite_node("root", logic=eproc.CompositeLogic.AND)
+    root = reg.get_composite_node("root")
     root.combiner = eproc.Minimum()
     reg.set_root(root)
     cands = list(handler.candidates)
@@ -1276,7 +1286,7 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
 
     """
     reg = NodeRegistry()
-    root = reg.get_composite_node("root", logic=eproc.CompositeLogic.AND)
+    root = reg.get_composite_node("root")
     root.combiner = eproc.Minimum()
     reg.set_root(root)
     loser = Contest.CANDIDATES.ALL_OTHERS
@@ -1292,7 +1302,7 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
 @link_with_scf(scc.InstantRunoff)
 def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
-    root = reg.get_composite_node("root", logic=eproc.CompositeLogic.AND)
+    root = reg.get_composite_node("root")
     root.combiner = eproc.Minimum()
     reg.set_root(root)
     if 'assertion_json' in dir(handler.contest):  # Check if assertion_json is provided. TODO this is ugly
@@ -1326,7 +1336,7 @@ def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers
         for altorder in altorders:
             if altorder[-1] in winners:  # TODO only supports one winner, throw exception somewhere
                 continue  # skip non-altorders
-            node = reg.get_composite_node(str(altorder), logic=eproc.CompositeLogic.OR)
+            node = reg.get_composite_node(str(altorder))
             node.combiner = eproc.Linear()
             root.add_child(node)
             for i, newc in enumerate(altorder):

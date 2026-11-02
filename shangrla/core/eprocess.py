@@ -59,6 +59,11 @@ class EProcess:
         """Return the length of the process (number of timesteps)."""
         return len(self._values)
 
+    def reset(self):
+        """Clear the stored process values and running maximum."""
+        self._values = np.array([], dtype=float)
+        self.running_max = -np.inf
+
     def append(self, values: np.ndarray):
         """Append new values to the end of the time series and update running_max.
 
