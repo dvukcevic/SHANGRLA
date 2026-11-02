@@ -394,9 +394,11 @@ class Quadratic(Combiner):
 class Largest(Combiner):
     """Combiner that follows the largest previous-weighted child.
 
-    It selects the largest current value on the first row, then the index of the
-    maximum value in the previous-history row. It returns that index's increment
-    (values[k] - prev[k]); ties are broken by first occurrence.
+    When no history is available, it behaves like Linear and returns the
+    log-sum-exp increment from the implicit zero previous state. Otherwise, it
+    selects the index of the maximum value in the previous-history row and
+    returns that index's increment (values[k] - prev[k]); ties are broken by
+    first occurrence.
 
     This is a winner-takes-most transition: a single child is selected based on
     the previous row and the increment for that child is propagated forward.
@@ -404,23 +406,21 @@ class Largest(Combiner):
 
     def __init__(self, history_length: int = 1):
         super().__init__(history_length)
-        self._has_observed_values = False
-        self._select_current = False
+        self._use_linear_fallback = False
 
     def reset(self):
         super().reset()
-        self._has_observed_values = False
-        self._select_current = False
+        self._use_linear_fallback = False
 
     def __call__(self, values: np.ndarray) -> float:
-        self._select_current = not self._has_observed_values and self.history is None
-        result = super().__call__(values)
-        self._has_observed_values = True
-        return result
+        self._use_linear_fallback = self.history is None
+        return super().__call__(values)
 
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
-        k = int(np.argmax(values if self._select_current else prev))
+        if self._use_linear_fallback:
+            return float(logsumexp(values) - logsumexp(prev))
+        k = int(np.argmax(prev))
         increments = values - prev
         return float(increments[k])
 

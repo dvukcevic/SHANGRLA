@@ -243,11 +243,20 @@ class TestLargestCombiner:
     """Test suite for Largest combiner"""
 
     def test_largest_basic(self):
-        """On first call, history is zero, so argmax picks index 2 and returns that increment."""
+        """Without history, Largest should match Linear's equally weighted combination."""
         combiner = Largest()
         values = np.array([1.0, 2.0, 3.0])
         result = combiner(values)
-        assert result == pytest.approx(3.0)
+        assert result == pytest.approx(Linear()(values))
+
+    def test_largest_without_history_length_matches_linear(self):
+        """When history is disabled, every call should use Linear's no-history behavior."""
+        largest = Largest(history_length=0)
+        linear = Linear(history_length=0)
+        rows = [np.array([1.0, 2.0]), np.array([3.0, 1.0])]
+
+        for row in rows:
+            assert largest(row) == pytest.approx(linear(row))
 
     def test_largest_sequence_uses_previous_max_index(self):
         """Largest should follow the largest previous value, not the largest current value."""
