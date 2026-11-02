@@ -307,14 +307,9 @@ class Assertion:
 
         """
         tally = tally if tally else self.contest.tally
-        if (
-            self.contest.choice_function == Contest.SOCIAL_CHOICE_FUNCTION.PLURALITY
-            or self.contest.choice_function == Contest.SOCIAL_CHOICE_FUNCTION.APPROVAL
-        ):
+        if isinstance(self.contest.choice_function, (scc.Plurality, scc.Approval)):
             self.margin = (tally[self.winner] - tally[self.loser]) / self.contest.cards
-        elif (
-            self.contest.choice_function == Contest.SOCIAL_CHOICE_FUNCTION.SUPERMAJORITY
-        ):
+        elif isinstance(self.contest.choice_function, scc.Threshold):
             if (
                 self.winner == Contest.CANDIDATES.NO_CANDIDATE
                 or self.loser != Contest.CANDIDATES.ALL_OTHERS
@@ -531,7 +526,7 @@ class Assertion:
             )  # rate of small values
             x = big * np.ones(self.test.N)
             if self.contest.audit_type == Audit.AUDIT_TYPE.POLLING:
-                if self.contest.choice_function == Contest.SOCIAL_CHOICE_FUNCTION.IRV:
+                if isinstance(self.contest.choice_function, scc.InstantRunoff):
                     raise NotImplementedError(
                         f"data must be provided to estimate sample sizes for IRV assertions"
                     )

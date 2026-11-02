@@ -4,8 +4,9 @@ import sys
 import pytest
 
 from shangrla.core.Audit import Audit
-from shangrla.core.assertion import Assertion, Assorter
-from shangrla.core.contest import Contest, CVR
+from shangrla.core.assertion import Assertion, AssertionHandler, Assorter
+from shangrla.core.contest import Contest, CVR, InstantRunoff, Plurality, Threshold
+from shangrla.core.eprocess import LeafNode
 from shangrla.core.NonnegMean import NonnegMean
 
 ######################################################################################
@@ -15,7 +16,7 @@ class TestAssertion:
                  'name': 'AvB',
                  'risk_limit': 0.05,
                  'cards': 10**4,
-                 'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.SUPERMAJORITY,
+                 'choice_function': Threshold(threshold=2/3),
                  'n_winners': 1,
                  'candidates': 3,
                  'candidates': ['Alice','Bob','Candy'],
@@ -37,7 +38,7 @@ class TestAssertion:
                  'name': 'AvB',
                  'risk_limit': 0.05,
                  'cards': 4,
-                 'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.PLURALITY,
+                 'choice_function': Plurality(),
                  'n_winners': 1,
                  'candidates': 3,
                  'candidates': ['Alice','Bob','Candy'],
@@ -83,10 +84,14 @@ class TestAssertion:
 
 
     def test_min_p(self):
-        asrtn1 = Assertion(p_value = 0.1, p_history = [1, 0.5, 0.1, 0.01, 0.1])
-        asrtn2 = Assertion(p_value = 0.05, p_history = [0.05])
-        assert Assertion.min_p(asrtn1) == 0.01
-        assert Assertion.min_p(asrtn2) == 0.05
+        node1 = LeafNode(id="first")
+        node1.eprocess.append(np.log(1 / np.array([1, 0.5, 0.1, 0.01, 0.1])))
+        node2 = LeafNode(id="second")
+        node2.eprocess.append(np.log(1 / np.array([0.05])))
+        asrtn1 = Assertion(node=node1)
+        asrtn2 = Assertion(node=node2)
+        assert asrtn1.min_p() == pytest.approx(0.01)
+        assert asrtn2.min_p() == pytest.approx(0.05)
 
     #what's the right way to write a unit test for this?
     #define a bare-minimum Assertion / Assorter and CVR list and then call margin on them?
@@ -141,7 +146,13 @@ class TestAssertion:
     def test_make_plurality_assertions(self):
         winner = ["Alice","Bob"]
         loser = ["Candy","Dan"]
-        asrtns = Assertion.make_plurality_assertions(self.con_test, winner, loser)
+        contest = Contest(
+            id="AvB",
+            choice_function=Plurality(),
+            candidates=winner + loser,
+            winner=winner,
+        )
+        asrtns = AssertionHandler(contest).assertions
 
         #these test Assorter.assort()
         assert asrtns['Alice v Candy'].assorter.assort(CVR.from_vote({'Alice': 1})) == 1
@@ -172,8 +183,7 @@ class TestAssertion:
 
     def test_supermajority_assorter(self):
         loser = ['Bob','Candy']
-        assn = Assertion.make_supermajority_assertion(contest=self.con_test, winner="Alice",
-                                                      loser=loser)
+        assn = AssertionHandler(self.con_test).assertions
 
         label = 'Alice v ' + Contest.CANDIDATES.ALL_OTHERS
         votes = CVR.from_vote({"Alice": 1})
@@ -200,7 +210,7 @@ class TestAssertion:
                      'name': 'AvB',
                      'risk_limit': 0.05,
                      'cards': 10**4,
-                     'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.IRV,
+                     'choice_function': InstantRunoff(),
                      'n_winners': 1,
                      'test': NonnegMean.alpha_mart,
                      'use_style': True
@@ -210,8 +220,10 @@ class TestAssertion:
                 cands = [audit['winner']]
                 for elim in audit['eliminated']:
                     cands.append(elim)
-                all_assertions = Assertion.make_assertions_from_json(contest=AvB, candidates=cands,
-                                                                     json_assertions=audit['assertions'])
+                AvB.candidates = cands
+                AvB.winner = [audit['winner']]
+                AvB.assertion_json = audit['assertions']
+                all_assertions = AssertionHandler(AvB).assertions
                 assertions[audit['contest']] = all_assertions
 
             # winner only assertion
@@ -461,7 +473,7 @@ class TestAssertion:
                              'name': 'AvB',
                              'risk_limit': 0.05,
                              'cards': N,
-                             'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.PLURALITY,
+                             'choice_function': Plurality(),
                              'n_winners': 1,
                              'candidates': ['Alice','Bob', 'Carol'],
                              'winner': ['Alice'],
@@ -472,7 +484,7 @@ class TestAssertion:
                              'use_style': True
                         })
         loser = list(set(AvB.candidates)-set(AvB.winner))
-        AvB.assertions = Assertion.make_plurality_assertions(AvB, winner=AvB.winner, loser=loser)
+        AvB.assertions = AssertionHandler(AvB).assertions
         AvB.find_margins_from_tally()
         for a_id, a in AvB.assertions.items():
             # first test
@@ -506,7 +518,7 @@ class TestAssertion:
                      'name': 'AvB',
                      'risk_limit': 0.01,
                      'cards': 10**4,
-                     'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.PLURALITY,
+                     'choice_function': Plurality(),
                      'n_winners': 1,
                      'candidates': ['Alice','Bob','Carol'],
                      'winner': ['Alice'],
@@ -516,7 +528,7 @@ class TestAssertion:
                      'g': 0.1,
                      'use_style': True
                 })
-        AvB.assertions = Assertion.make_plurality_assertions(AvB, winner=['Alice'], loser=['Bob','Carol'])
+        AvB.assertions = AssertionHandler(AvB).assertions
         AvB.find_margins_from_tally()
         assert AvB.assertions['Alice v Bob'].margin == (AvB.tally['Alice'] - AvB.tally['Bob'])/AvB.cards
         assert AvB.assertions['Alice v Carol'].margin == (AvB.tally['Alice'] - AvB.tally['Carol'])/AvB.cards
