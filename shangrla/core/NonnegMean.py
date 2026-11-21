@@ -225,24 +225,53 @@ class NonnegMean:
 
         lam = np.asarray(self.bet(x), dtype=float)
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            terms = np.cumprod(1 + lam * (x - m))
+            factors = 1 + lam * (x - m)
+        factors = np.where(np.isfinite(factors) & (factors > 0), factors, 0)
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            terms = np.cumprod(factors)
 
-        terms[m > u] = 0  # true mean is certainly less than hypothesized
-        terms[np.isclose(0, m, atol=atol)] = 1  # ignore
-        terms[np.isclose(u, m, atol=atol, rtol=rtol)] = 1  # ignore
-        terms[np.isclose(0, terms, atol=atol)] = (
-            1  # martingale effectively vanishes; p-value 1
+        # Overflow is not certainty. Preserve the largest finite float instead.
+        finite_max = np.finfo(float).max
+        terms = np.where(np.isposinf(terms), finite_max, terms)
+        terms = np.where(np.isnan(terms), 0, terms)
+        terms = np.maximum(0, terms)
+        terms = np.minimum(finite_max, terms)
+
+        certainly_below = m > u
+        terms[certainly_below] = 0
+
+        certainly_above = np.zeros(len(x), dtype=bool)
+        if np.isfinite(N):
+            prefix_totals = np.cumsum(x)
+            certainly_above |= prefix_totals > N * t
+        certainly_above |= (
+            (m < 0)
+            & ~np.isclose(0, m, atol=atol)
+            & ~np.isclose(u, m, atol=atol, rtol=rtol)
         )
-        terms[m < 0] = np.inf  # true mean certainly greater than hypothesized
-        terms[-1] = (
-            np.inf if Stot > N * t else terms[-1]
-        )  # final sample makes the total greater than the null
+        certainly_above |= not np.isfinite(N) and t < 0
+        terms[certainly_above] = np.inf
+
+        # At the bounds, a factor is ignored if it would otherwise make the
+        # martingale divide by a zero or negative remaining population mean.
+        ignore = (
+            np.isclose(0, m, atol=atol)
+            | np.isclose(u, m, atol=atol, rtol=rtol)
+        )
+        terms[ignore & ~certainly_below & ~certainly_above] = 1
 
         if kwargs.get("return_evidence", False):
             return max(0, np.max(terms)), np.maximum(0, terms)
 
         evidence_history = np.maximum(0, terms)
-        p_history = np.minimum(1, 1 / evidence_history)
+        p_history = np.ones_like(evidence_history)
+        np.divide(
+            1,
+            evidence_history,
+            out=p_history,
+            where=evidence_history > 0,
+        )
+        p_history = np.minimum(1, p_history)
         p = np.min(p_history)
         return float(min(1, p)), p_history
 

@@ -1,7 +1,7 @@
 # TODO
 
 - [x] Make legacy test processes special cases of `alpha_mart`.
-- [ ] Handle certainty and infinite evidence, including verifying that evidence is
+- [x] Handle certainty and infinite evidence, including verifying that evidence is
       returned as `inf` only when the result is certain.
 - [ ] Cap converted p-values at 1.
 - [ ] Thoroughly test `MinOfRunningMax` and verify that retaining only partial

@@ -40,6 +40,10 @@ class EProcess:
     def __post_init__(self):
         """Update running_max after initialization if initial values are present."""
         if len(self._values) > 0:
+            values = np.asarray(self._values, dtype=float)
+            if np.any(np.isnan(values)):
+                raise ValueError("EProcess values must contain no NaN; finite and infinite values are allowed")
+            self._values = values
             self.running_max = np.max(self._values)
 
     def __getitem__(self, item):
@@ -77,8 +81,8 @@ class EProcess:
             values = values.reshape(1)
         if values.size == 0:
             return
-        if not np.all(np.isfinite(values)):
-            raise ValueError("EProcess values must contain only finite numbers")
+        if np.any(np.isnan(values)):
+            raise ValueError("EProcess values must contain no NaN; finite and infinite values are allowed")
         self._values = np.append(self._values, values)
         self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
 
@@ -109,8 +113,8 @@ class EProcess:
         start = int(start)
         if start < 0:
             raise ValueError("start must be non-negative")
-        if not np.all(np.isfinite(values)):
-            raise ValueError("EProcess values must contain only finite numbers")
+        if np.any(np.isnan(values)):
+            raise ValueError("EProcess values must contain no NaN; finite and infinite values are allowed")
 
         if start > len(self._values):
             raise ValueError(f"Index {start} out of bounds for EProcess with shape {self._values.shape}")
@@ -142,8 +146,8 @@ class EProcess:
         start = int(start)
         if start < 0 or start + len(values) > len(self._values):
             raise ValueError("Replacement range must fit within the existing EProcess")
-        if not np.all(np.isfinite(values)):
-            raise ValueError("EProcess values must contain only finite numbers")
+        if np.any(np.isnan(values)):
+            raise ValueError("EProcess values must contain no NaN; finite and infinite values are allowed")
         self._values[start:start + len(values)] = values
         self.running_max = np.max(self._values) if self._values.size > 0 else -np.inf
 

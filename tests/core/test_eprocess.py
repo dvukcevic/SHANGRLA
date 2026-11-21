@@ -95,6 +95,12 @@ class TestEProcess:
         with pytest.raises(ValueError, match="finite"):
             eproc.append(np.array([1.0, np.nan, 3.0]))
 
+    def test_append_accepts_infinite_log_evidence(self):
+        eproc = EProcess()
+        eproc.append(np.array([1.0, np.inf]))
+        assert np.isinf(eproc[-1])
+        assert eproc.p_value() == 0
+
     def test_append_at_basic(self):
         """Test append_at with simple case"""
         eproc = EProcess(_values=np.array([0, 1, 2, 3]))

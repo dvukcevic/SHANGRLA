@@ -227,6 +227,35 @@ class TestNonnegMean:
                 x = val*np.ones(n)
                 np.testing.assert_almost_equal(test.betting_mart(x)[0], 1/(1+lam*(val-t))**n)
 
+    def test_betting_mart_infinite_evidence_only_when_certain(self):
+        test = NonnegMean(
+            N=10, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=0.25
+        )
+
+        evidence, evidence_history = test.betting_mart(
+            np.ones(6), return_evidence=True
+        )
+        assert np.isinf(evidence)
+        assert np.isinf(evidence_history).any()
+
+        certain_below = NonnegMean(
+            N=10, t=1, u=0.5, bet=NonnegMean.fixed_bet, lam=0.25
+        )
+        evidence, evidence_history = certain_below.betting_mart(
+            np.zeros(6), return_evidence=True
+        )
+        assert evidence == 0
+        assert np.all(evidence_history == 0)
+
+    def test_betting_mart_does_not_turn_overflow_into_certainty(self):
+        test = NonnegMean(
+            N=np.inf, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=0.5
+        )
+        evidence, evidence_history = test.betting_mart(
+            np.ones(1), return_evidence=True
+        )
+        assert np.isfinite(evidence)
+
     def test_sjm(self):
         # test_sjm_with_replacement:
         test = NonnegMean()
