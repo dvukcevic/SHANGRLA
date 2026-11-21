@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 import numpy as np
 import warnings
@@ -107,6 +109,9 @@ class NonnegMean:
             eta: float in (t,u] (default u*(1-eps))
                 value parametrizing the bet. Use alternative hypothesized population mean for polling audit
                 or a value nearer the upper bound for comparison audits
+            return_evidence: bool (default False)
+                If True, return the raw maximum martingale evidence and the sample-by-sample
+                evidence history instead of p-values.
 
 
         Returns
@@ -116,30 +121,29 @@ class NonnegMean:
         p_history: numpy array
             sample by sample history of p-values. Not meaningful unless the sample is in random order.
         """
-        N = self.N
-        t = self.t
-        u = self.u
-        atol = kwargs.get("atol", 2 * np.finfo(float).eps)
-        rtol = kwargs.get("rtol", 10**-6)
-        _S, Stot, _j, m = self.sjm(N, t, x)
+        x = np.asarray(x)
+        _S, _Stot, _j, m = self.sjm(self.N, self.t, x)
 
-        x = np.array(x)
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            etaj = self.estim(x)
-            terms = np.cumprod((x * etaj / m + (u - x) * (u - etaj) / (u - m)) / u)
+            etaj = np.asarray(self.estim(x), dtype=float)
+            lam = (etaj / m - 1) / (self.u - m)
 
-        terms[m > u] = 0  # true mean is certainly less than hypothesized
-        terms[np.isclose(0, m, atol=atol)] = 1  # ignore
-        terms[np.isclose(u, m, atol=atol, rtol=rtol)] = 1  # ignore
-        terms[np.isclose(0, terms, atol=atol)] = (
-            1  # martingale effectively vanishes; p-value 1
-        )
-        terms[m < 0] = np.inf  # true mean certainly greater than hypothesized
-        terms[-1] = (
-            np.inf if Stot > N * t else terms[-1]
-        )  # final sample makes the total greater than the null
-        # return min(1, 1 / np.max(terms)), np.minimum(1, 1 / terms)
-        return max(0, np.max(terms)), np.maximum(0, terms)
+        original_bet = self.bet
+        try:
+            self.bet = lambda _x: lam
+            return_evidence = kwargs.pop("return_evidence", False)
+            if return_evidence:
+                evidence, evidence_history = self.betting_mart(
+                    x, return_evidence=True, **kwargs
+                )
+            else:
+                p, p_history = self.betting_mart(x, **kwargs)
+        finally:
+            self.bet = original_bet
+
+        if return_evidence:
+            return evidence, evidence_history
+        return p, p_history
 
     def sjm(self, N: int, t: float, x: np.array) -> tuple[np.array, float, np.array, np.array]:
         """
@@ -198,6 +202,10 @@ class NonnegMean:
             eta: float in (t,u] (default u*(1-eps))
                 value parametrizing the bet. Use alternative hypothesized population mean for polling audit
                 or a value nearer the upper bound for comparison audits
+            return_evidence: bool (default False)
+                If True, return the raw maximum martingale evidence and the sample-by-sample
+                evidence history instead of p-values. Otherwise, convert the evidence to p-values
+                and return the minimum p-value and p-value history.
 
 
         Returns
@@ -207,16 +215,18 @@ class NonnegMean:
         p_history: numpy array
             sample by sample history of p-values. Not meaningful unless the sample is in random order.
         """
+        x = np.asarray(x)
         N = self.N
         t = self.t
         u = self.u
         atol = kwargs.get("atol", 2 * np.finfo(float).eps)
         rtol = kwargs.get("rtol", 10**-6)
         _S, Stot, _j, m = self.sjm(N, t, x)
-        x = np.array(x)
+
+        lam = np.asarray(self.bet(x), dtype=float)
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            lam = self.bet(x)
             terms = np.cumprod(1 + lam * (x - m))
+
         terms[m > u] = 0  # true mean is certainly less than hypothesized
         terms[np.isclose(0, m, atol=atol)] = 1  # ignore
         terms[np.isclose(u, m, atol=atol, rtol=rtol)] = 1  # ignore
@@ -227,7 +237,14 @@ class NonnegMean:
         terms[-1] = (
             np.inf if Stot > N * t else terms[-1]
         )  # final sample makes the total greater than the null
-        return min(1, 1 / np.max(terms)), np.minimum(1, 1 / terms)
+
+        if kwargs.get("return_evidence", False):
+            return max(0, np.max(terms)), np.maximum(0, terms)
+
+        evidence_history = np.maximum(0, terms)
+        p_history = np.minimum(1, 1 / evidence_history)
+        p = np.min(p_history)
+        return float(min(1, p)), p_history
 
     def fixed_alternative_mean(self, x: np.array, **kwargs) -> np.array:
         r"""
@@ -327,9 +344,10 @@ class NonnegMean:
         sdj[1] = 1
         weighted = ((d * eta + S) / (d + j - 1) + u * f / sdj) / (1 + f / sdj)
         tol = c / np.sqrt(d + j - 1)
+        most = u * (1 - np.finfo(float).eps)
         return np.minimum(
-            u * (1 - np.finfo(float).eps) - tol,
-            np.maximum(weighted, m * (1 + np.finfo(float).eps) + tol)
+            most,
+            np.maximum(weighted, m + tol)
         )
 
     def optimal_comparison(self, x: np.array, **kwargs) -> np.array:
@@ -543,18 +561,33 @@ class NonnegMean:
         t = self.t
         g = getattr(self, "g", 0)
         random_order = getattr(self, "random_order", True)
-        x = np.array(x)
+        x = np.asarray(x)
         assert all(x >= 0), "Negative value in a nonnegative population!"
         assert len(x) <= N, "Sample size is larger than the population!"
         assert N > 0, "Population size not positive!"
         assert N == int(N), "Non-integer population size!"
 
-        _S, _Stot, _j, m = self.sjm(N, t+g, x+g)
-        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            terms = np.cumprod((x + g) / m)
-        terms[m < 0] = np.inf
-        p = min((1 / np.max(terms) if random_order else 1 / terms[-1]), 1)
-        return p, np.minimum(1 / terms, 1)
+        original_t = self.t
+        original_bet = self.bet
+        original_lam = getattr(self, "lam", None)
+        try:
+            self.t = t + g
+            x_g = x + g
+            _S, _Stot, _j, m_g = self.sjm(N, self.t, x_g)
+            self.lam = 1 / m_g
+            self.bet = self.fixed_bet
+            p, p_history = self.betting_mart(x_g, **kwargs)
+        finally:
+            self.t = original_t
+            self.bet = original_bet
+            if original_lam is None:
+                self.__dict__.pop("lam", None)
+            else:
+                self.lam = original_lam
+
+        if not random_order:
+            p = float(p_history[-1])
+        return float(min(1, p)), p_history
 
     def kaplan_markov(self, x: np.array, **kwargs) -> tuple[float, np.array]:
         """
@@ -589,14 +622,17 @@ class NonnegMean:
         t = self.t
         g = getattr(self, "g", 0)
         random_order = getattr(self, "random_order", True)
-        if negs := sum(xx < 0 for xx in x) > 0:
+        x = np.asarray(x)
+        negs = int(np.sum(x < 0))
+        if negs > 0:
             raise ValueError(
-                "{negs} negative values in sample from a nonnegative population."
+                f"{negs} negative values in sample from a nonnegative population."
             )
+
         p_history = np.cumprod((t + g) / (x + g))
-        return np.min(
-            [1, np.min(p_history) if random_order else p_history[-1]]
-        ), np.minimum(p_history, 1)
+        p = np.min(p_history) if random_order else p_history[-1]
+        p_history = np.minimum(p_history, 1)
+        return float(min(1, p)), p_history
 
     def kaplan_wald(self, x: np.array, **kwargs) -> tuple[float, np.array]:
         r"""
@@ -636,10 +672,25 @@ class NonnegMean:
             raise ValueError(f"{g=}, but g must be between 0 and 1. ")
         if any(xx < 0 for xx in x):
             raise ValueError("Negative value in sample from a nonnegative population.")
-        p_history = np.cumprod((1 - g) * x / t + g)
-        return np.min(
-            [1, 1 / np.max(p_history) if random_order else 1 / p_history[-1]]
-        ), np.minimum(1 / p_history, 1)
+        if t == 0:
+            raise ValueError("t must be positive")
+
+        original_bet = self.bet
+        original_lam = getattr(self, "lam", None)
+        try:
+            self.lam = (1 - g) / t
+            self.bet = self.fixed_bet
+            p, p_history = self.betting_mart(x, **kwargs)
+        finally:
+            self.bet = original_bet
+            if original_lam is None:
+                self.__dict__.pop("lam", None)
+            else:
+                self.lam = original_lam
+
+        if not random_order:
+            p = float(p_history[-1])
+        return float(min(1, p)), p_history
 
     def wald_sprt(self, x: np.array, **kwargs) -> tuple[float, np.array]:
         """
@@ -677,34 +728,32 @@ class NonnegMean:
         """
         u = self.u
         N = self.N
-        t = self.t
-        eta = getattr(self, "eta", u * (1 - np.finfo(float).eps))
         random_order = getattr(self, "random_order", True)
+        eta = getattr(self, "eta", u * (1 - np.finfo(float).eps))
         if any((xx < 0 or xx > u) for xx in x):
             raise ValueError(f"Data out of range [0,{u}]")
-        if np.isfinite(N):
-            if not random_order:
-                raise ValueError(
-                    "data must be in random order for samples without replacement"
-                )
-            S = np.insert(np.cumsum(x), 0, 0)[0:-1]  # 0, x_1, x_1+x_2, ...,
-            j = np.arange(1, len(x) + 1)  # 1, 2, 3, ..., len(x)
-            m = (N * t - S) / (
-                N - j + 1
-            )  # mean of population after (j-1)st draw, if null is true
-            etas = (N * eta - S) / (N - j + 1)
-        else:
-            m = t
-            etas = eta
-        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            terms = np.cumprod(
-                (x * etas / m + (u - x) * (u - etas) / (u - m)) / u
-            )  # generalization of Bernoulli SPRT
-        terms[m < 0] = np.inf  # the null is surely false
-        terms = np.cumprod(terms)
-        return 1 / np.max(terms) if random_order else 1 / terms[-1], np.minimum(
-            1, 1 / terms
-        )
+        if np.isfinite(N) and not random_order:
+            raise ValueError(
+                "data must be in random order for samples without replacement"
+            )
+
+        original_eta = getattr(self, "eta", None)
+        original_estim = self.estim
+        try:
+            self.eta = eta
+            self.estim = self.fixed_alternative_mean
+            _evidence, evidence_history = self.alpha_mart(x, **kwargs)
+        finally:
+            self.estim = original_estim
+            if original_eta is None:
+                self.__dict__.pop("eta", None)
+            else:
+                self.eta = original_eta
+
+        evidence_history = np.asarray(evidence_history, dtype=float)
+        p_history = np.minimum(1, 1 / evidence_history)
+        p = np.min(p_history) if random_order else p_history[-1]
+        return float(min(1, p)), p_history
 
     def sample_size(self, x: list = None, alpha: float = 0.05, reps: int = None, prefix: bool = False,
                     quantile: float = 0.5, **kwargs) -> int:
