@@ -8,7 +8,7 @@ from shangrla.core.cvr import CVR
 
 ##########################################################################################
 
-TEST_DATA_DIR = Path(__file__).resolve().parent.parent / "core" / "data"
+TEST_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 class TestDominion:

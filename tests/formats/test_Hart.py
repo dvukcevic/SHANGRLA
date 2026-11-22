@@ -7,7 +7,7 @@ from shangrla.core.cvr import CVR
 from shangrla.formats.Hart import Hart
 
 
-TEST_DATA_DIR = Path(__file__).resolve().parent.parent / "core" / "data"
+TEST_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 
 ######################################################################################
