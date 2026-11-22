@@ -92,6 +92,27 @@ def test_set_p_values_updates_assertion_and_contest_summaries():
     assert handler.proved
 
 
+def test_polling_estimator_receives_contest_level_parameters():
+    contest = Contest(
+        id="mayor",
+        cards=100,
+        choice_function=Plurality(),
+        candidates=["Alice", "Bob"],
+        winner=["Alice"],
+        audit_type=Audit.AUDIT_TYPE.POLLING,
+        test=NonnegMean.alpha_mart,
+        estim=NonnegMean.shrink_trunc,
+        eta=0.55,
+        d=20,
+        use_style=False,
+    )
+    handler = AssertionHandler(contest)
+    assertion = next(iter(handler.assertions.values()))
+
+    assert assertion.test.eta == 0.55
+    assert assertion.test.d == 20
+
+
 def test_repeated_full_sample_update_recomputes_composition():
     handler = make_handler()
     sample = make_sample("Alice", 10)

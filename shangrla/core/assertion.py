@@ -748,6 +748,22 @@ class AssertionHandler:
         self.build_assertion_handler()
 
     def make_assertion(self, node, winner, loser, winner_cands, loser_cands, id=None):
+        test_kwargs = dict(self.test_kwargs)
+        for key in (
+            "eta",
+            "d",
+            "c",
+            "f",
+            "minsd",
+            "lam",
+            "error_rate_1",
+            "error_rate_2",
+            "c_grapa_0",
+            "c_grapa_m",
+            "c_grapa_g",
+        ):
+            if hasattr(self.contest, key):
+                test_kwargs.setdefault(key, getattr(self.contest, key))
         _test = NonnegMean(
             test=self.test,
             estim=self.estim,
@@ -757,7 +773,7 @@ class AssertionHandler:
             N=self.contest.cards,
             t=1 / 2,
             random_order=True,
-            **self.test_kwargs)
+            **test_kwargs)
         _assorter = Assorter(
             contest=self.contest,
             assort=self.contest.make_assort_function(winner=winner, loser=loser, winner_cands=winner_cands, loser_cands=loser_cands),

@@ -248,6 +248,7 @@ class Contest:
             tally: dict = None,
             sample_size: int = None,
             sample_threshold: float = None,
+            **kwargs,
     ):
         self.id = id
         self.name = name
@@ -270,6 +271,7 @@ class Contest:
         self.tally = tally
         self.sample_size = sample_size
         self.sample_threshold = sample_threshold
+        self.__dict__.update(kwargs)
 
     def __str__(self):
         return str(self.__dict__)
