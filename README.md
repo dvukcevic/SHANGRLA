@@ -34,6 +34,10 @@ board](https://rla.vptech.io/home).
 We provide an open-source reference implementation and exemplar calculations in
 Jupyter notebooks.
 
+## Workflows
+
+See [`docs/workflows.md`](docs/workflows.md) for end-to-end examples of how to
+use SHANGRLA for various types of audits.
 
 ## Installation
 
