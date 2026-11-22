@@ -300,6 +300,30 @@ class TestLargestCombiner:
 class TestMinOfRunningMaxCombiner:
     """Test suite for MinOfRunningMax combiner"""
 
+    def test_negative_values_start_from_zero_baseline(self):
+        combiner = MinOfRunningMax()
+
+        result = combiner(np.array([-2.0, -1.0]))
+
+        assert result == pytest.approx(0.0)
+        np.testing.assert_array_equal(combiner.running_max, np.array([0.0, 0.0]))
+
+    def test_reset_clears_running_max(self):
+        combiner = MinOfRunningMax()
+        combiner(np.array([1.0, 3.0]))
+
+        combiner.reset()
+
+        assert combiner.running_max is None
+        assert combiner.history is None
+
+    def test_set_history_seeds_running_max_from_complete_buffer(self):
+        combiner = MinOfRunningMax(history_length=3)
+        combiner.set_history(np.array([[1.0, 5.0], [4.0, 2.0], [3.0, 6.0]]))
+
+        np.testing.assert_array_equal(combiner.running_max, np.array([4.0, 6.0]))
+        assert combiner(np.array([5.0, 7.0])) == pytest.approx(1.0)
+
     def test_min_of_running_max_initialization(self):
         """Test that MinOfRunningMax initializes running_max correctly"""
         combiner = MinOfRunningMax()
@@ -663,6 +687,26 @@ class TestIntegration:
         expected = root.eprocess._values.copy()
 
         for start, end in [(1, 5), (0, 4), (2, 5), (1, 3)]:
+            root.combine(start=start, end=end)
+            np.testing.assert_array_equal(root.eprocess._values, expected)
+
+    def test_min_of_running_max_partial_recompute_preserves_old_evidence(self):
+        """Partial recomputation must retain running maxima from before the history window."""
+        leaf_a = LeafNode("a")
+        leaf_b = LeafNode("b")
+        leaf_a.eprocess = EProcess(_values=np.array([0.0, 5.0, 1.0, 7.0]))
+        leaf_b.eprocess = EProcess(_values=np.array([0.0, 1.0, 6.0, 2.0]))
+        root = CompositeNode(
+            "root",
+            children=[leaf_a, leaf_b],
+            combiner=MinOfRunningMax(history_length=1),
+        )
+
+        root.combine(start=0, end=4)
+        expected = root.eprocess._values.copy()
+        np.testing.assert_array_equal(expected, np.array([0.0, 1.0, 5.0, 6.0]))
+
+        for start, end in [(3, 4), (1, 4), (2, 3), (0, 4)]:
             root.combine(start=start, end=end)
             np.testing.assert_array_equal(root.eprocess._values, expected)
 

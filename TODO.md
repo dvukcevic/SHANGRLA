@@ -4,7 +4,7 @@
 - [x] Handle certainty and infinite evidence, including verifying that evidence is
       returned as `inf` only when the result is certain.
 - [x] Cap converted p-values at 1.
-- [ ] Thoroughly test `MinOfRunningMax` and verify that retaining only partial
+- [x] Thoroughly test `MinOfRunningMax` and verify that retaining only partial
       history still produces correct calculations.
 - [ ] Move CVR functionality into a separate module, apart from contest and
       social-choice-function handling.

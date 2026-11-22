@@ -305,6 +305,15 @@ class Combiner(ABC):
         """Return an adjusted start index that includes any previous rows required by history."""
         return max(0, start - self.history_length)
 
+    def seed_state(self, values: np.ndarray) -> None:
+        """Seed any state maintained independently of the history buffer.
+
+        Most combiners need no state beyond ``history``. Combiners whose state
+        depends on the entire prefix can override this hook so partial
+        recomputation starts from the correct cumulative state.
+        """
+        return
+
     @abstractmethod
     def operate(self, values: np.ndarray) -> float:
         """Compute the log-increment for a single timestep given `values`.
@@ -350,6 +359,26 @@ class MinOfRunningMax(Combiner):
     def reset(self):
         super().reset()
         self.running_max = None
+
+    def set_history(self, values: np.ndarray):
+        super().set_history(values)
+        if self.history is None:
+            self.running_max = None
+        else:
+            self.seed_state(self.history)
+
+    def seed_state(self, values: np.ndarray) -> None:
+        """Seed per-child running maxima from a complete prefix or history buffer."""
+        values = np.asarray(values, dtype=float)
+        if values.ndim == 1:
+            values = values.reshape(1, -1)
+        elif values.ndim != 2:
+            raise ValueError("Running-max seed values must be a 1-D or 2-D array")
+        if values.shape[0] == 0:
+            return
+        if not np.all(np.isfinite(values)):
+            raise ValueError("Running-max seed values must contain only finite numbers")
+        self.running_max = np.maximum(np.max(values, axis=0), np.zeros(values.shape[1], dtype=float))
 
     def __call__(self, values: np.ndarray) -> float:
         if self.running_max is None:
@@ -599,6 +628,15 @@ class CompositeNode(Node):
         # set the history of the combiner if historic rows are available
         if hist_len > 0:
             self.combiner.set_history(transposed[:hist_len])
+        elif start == 0:
+            self.combiner.reset()
+
+        # Stateful combiners may depend on evidence older than their retained
+        # history buffer. Seed that state from the complete prefix before
+        # processing the recomputation window.
+        if start > 0:
+            prefix = np.stack([child[:start] for child in self.children], axis=1)
+            self.combiner.seed_state(prefix)
 
         # Remove only the rows we already seeded into history. The remaining rows
         # are the ones that should be processed by the combiner at this offset.
