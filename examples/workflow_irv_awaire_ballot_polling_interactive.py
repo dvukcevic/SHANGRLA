@@ -3,7 +3,7 @@
 
 from examples.workflow_irv_awaire_ballot_polling import create_workflow_data
 
-# Run the workflow setup to inspect the contest, reported CVRs, and sample.
+# Run the workflow setup to get the data structures for inspection.
 audit, contests, cvrs, mvr_sample = create_workflow_data()
 
 # The AWAIRE assertions are leaves in a composition tree of alternative orders.

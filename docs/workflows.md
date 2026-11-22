@@ -55,26 +55,38 @@ The workflow is:
 
 The complete synthetic example is in
 [`examples/workflow_irv_awaire_ballot_polling.py`](../examples/workflow_irv_awaire_ballot_polling.py).
-An interactive starter is available at
-[`examples/workflow_irv_awaire_ballot_polling_interactive.py`](../examples/workflow_irv_awaire_ballot_polling_interactive.py).
-It configures the contest with `Contest.ASSERTION_STRATEGY.AWAIRE`, creates the
-AWAIRE assertion tree, orders the sampled MVRs with
-`CVR.prep_polling_sample`, and updates evidence with
-`contest.assertions.set_p_values(mvr_sample)`. The sample demonstrates the
-composed alternative-order process reaching certainty. The audit status is
-reported with `audit.summarize_status(contests)`.
+
+The workflow is:
+
+1. Create one `Audit` and one `Contest`, with `Audit.AUDIT_TYPE.POLLING` and
+   `Contest.ASSERTION_STRATEGY.AWAIRE`.
+2. Create the AWAIRE assertion tree with `make_all_assertions(contests)`.
+3. Construct the reported-ballot CVRs from the synthetic rankings.
+4. Draw a random sample of CVRs as MVRs and put the polling sample in
+   selection order with `CVR.prep_polling_sample`.
+5. Call `contest.assertions.set_p_values(mvr_sample)` to update the composed
+   alternative-order evidence.
+6. Call `audit.summarize_status(contests)` to report whether the composed
+   process has reached certainty or requires more ballots.
 
 ## IRV AWAIRE ballot-level comparison audit
 
 The complete synthetic example is in
 [`examples/workflow_irv_awaire_ballot_comparison.py`](../examples/workflow_irv_awaire_ballot_comparison.py).
-An interactive starter is available at
-[`examples/workflow_irv_awaire_ballot_comparison_interactive.py`](../examples/workflow_irv_awaire_ballot_comparison_interactive.py).
-It configures the contest with `Contest.ASSERTION_STRATEGY.AWAIRE`, creates the
-AWAIRE assertion tree, and calculates comparison margins from the reported
-CVRs. The sample includes a reported-ranking error. The workflow prepares
-paired MVR/CVR samples with `CVR.prep_comparison_sample`, then updates evidence
-with `contest.assertions.set_p_values(mvr_sample, cvr_sample, use_all=True)`.
-Some generated requirements may not be supported individually by the CVRs;
-the audit result is determined by the composed alternative-order root process
-reported by `audit.summarize_status(contests)`.
+
+The workflow is:
+
+1. Create one `Audit` and one `Contest`, with
+   `Audit.AUDIT_TYPE.CARD_COMPARISON` and
+   `Contest.ASSERTION_STRATEGY.AWAIRE`.
+2. Create the AWAIRE assertion tree with `make_all_assertions(contests)`.
+3. Construct reported CVRs and matching manually interpreted MVRs, including
+   the reported-ranking error, and set comparison margins with
+   `set_all_margins_from_cvrs(audit, cvrs)`.
+4. Draw a random paired sample and call
+   `CVR.prep_comparison_sample(mvr_sample, cvr_sample, sample_order)` to put
+   both lists in selection order.
+5. Call `contest.assertions.set_p_values(mvr_sample, cvr_sample, use_all=True)`
+   to update all AWAIRE leaf evidence.
+6. Call `audit.summarize_status(contests)` to determine the audit result from
+   the composed alternative-order root process.

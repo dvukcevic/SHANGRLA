@@ -23,6 +23,7 @@ def create_workflow_data() -> tuple[
     )
     rng.shuffle(rankings)
 
+    # 1. Configure the audit and the polling contest.
     audit = Audit.from_dict({
         "seed": 93686630803205229070,
         "strata": {
@@ -51,8 +52,11 @@ def create_workflow_data() -> tuple[
         }
     })
     audit.check_audit_parameters(contests)
+
+    # 2. Create the AWAIRE assertion tree to be tested.
     make_all_assertions(contests)
 
+    # 3. Construct reported-ballot CVRs from the synthetic rankings.
     cvrs = CVR.from_dict([
         {
             "id": str(index),
@@ -66,6 +70,7 @@ def create_workflow_data() -> tuple[
         for index, ranking in enumerate(rankings)
     ])
 
+    # 4. Draw a random sample and put it in polling-selection order.
     # This decisive synthetic sample illustrates certainty in the composed
     # AWAIRE alternative-order process.
     sample_indices = rng.choice(len(cvrs), size=90, replace=False).tolist()
@@ -83,7 +88,11 @@ def run_workflow(
     mvr_sample: list[CVR],
 ) -> None:
     """Calculate polling evidence and report composed audit status."""
+
+    # 5. Update the assertion evidence with the manual vote records.
     contests["mayor"].assertions.set_p_values(mvr_sample)
+
+    # 6. Report whether the composed alternative-order process is conclusive.
     audit.summarize_status(contests)
 
 

@@ -30,6 +30,7 @@ def create_workflow_data() -> tuple[
     )
     reported_rankings[error_index] = ("Bob", "Alice", "Candy")
 
+    # 1. Configure the audit and the comparison contest.
     audit = Audit.from_dict({
         "seed": 93686630803205229070,
         "strata": {
@@ -58,8 +59,11 @@ def create_workflow_data() -> tuple[
         }
     })
     audit.check_audit_parameters(contests)
+
+    # 2. Create the AWAIRE assertion tree to be tested.
     make_all_assertions(contests)
 
+    # 3. Construct reported CVRs, matching manual CVRs, and comparison margins.
     cvrs = CVR.from_dict([
         {
             "id": str(index),
@@ -84,10 +88,11 @@ def create_workflow_data() -> tuple[
         }
         for index, ranking in enumerate(manual_rankings)
     ])
+    contests[contest_id].assertions.set_all_margins_from_cvrs(audit, cvrs)
 
+    # 4. Draw a paired sample and put both lists in comparison-selection order.
     # AWAIRE leaf assertions are components of alternative-order branches;
     # status is determined by the composed root, not each leaf in isolation.
-    contests[contest_id].assertions.set_all_margins_from_cvrs(audit, cvrs)
     sample_indices = rng.choice(
         [index for index in range(len(cvrs)) if index != error_index],
         size=39,
@@ -113,9 +118,13 @@ def run_workflow(
     cvr_sample: list[CVR],
 ) -> None:
     """Calculate comparison evidence and report composed audit status."""
+
+    # 5. Update all AWAIRE leaf evidence with the paired manual/reported votes.
     contests["mayor"].assertions.set_p_values(
         mvr_sample, cvr_sample, use_all=True
     )
+
+    # 6. Report whether the composed alternative-order root is conclusive.
     audit.summarize_status(contests)
 
 
