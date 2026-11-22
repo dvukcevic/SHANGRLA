@@ -8,7 +8,7 @@
       history still produces correct calculations.
 - [x] Move CVR functionality into a separate module, apart from contest and
       social-choice-function handling.
-- [ ] Check for direct access to class properties where a method should be used.
+- [x] Check for direct access to class properties where a method should be used.
 - [ ] Review the CVR implementation for gaps and add the missing tests.
 - [ ] Set the minimum supported Python version to 3.12 and update references
       that still specify an older version.

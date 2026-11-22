@@ -140,7 +140,7 @@ def merge_pvalues(assertions_dict):
     pvalue_histories = []
     for asrtn in assertions_dict:
         a = assertions_dict[asrtn]
-        p_history = a.p_history
+        p_history = a.node.eprocess.p_history()
         p_history_running_min = np.minimum.accumulate(p_history)
         pvalue_histories.append(p_history_running_min)
     pvalue_histories_stacked = np.stack(pvalue_histories)

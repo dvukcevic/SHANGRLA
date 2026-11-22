@@ -1226,8 +1226,9 @@ class Audit:
             print(f"\np-values for assertions in contest {c}")
             cpmax = 0
             for i, a in con.assertions.items():
-                cpmax = np.max([cpmax, a.p_value])
-                print(f"\t{i}: {a.p_value}")
+                p_value = a.p_value()
+                cpmax = np.max([cpmax, p_value])
+                print(f"\t{i}: {p_value}")
             if cpmax <= contests[c].risk_limit:
                 print(
                     f"\ncontest {c} AUDIT COMPLETE at risk limit {con.risk_limit}. Measured risk {cpmax}"
@@ -1239,8 +1240,9 @@ class Audit:
                 )
                 print("assertions remaining to be proved:")
                 for i, a in con.assertions.items():
-                    if a.p_value > con.risk_limit:
-                        print(f"\t{i}\t{a}: current risk {a.p_value}")
+                    p_value = a.p_value()
+                    if p_value > con.risk_limit:
+                        print(f"\t{i}\t{a}: current risk {p_value}")
         return done
 
     @classmethod

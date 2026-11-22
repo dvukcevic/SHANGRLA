@@ -1,5 +1,6 @@
 import sys
 import pytest
+from types import SimpleNamespace
 
 from shangrla.core.Audit import Audit
 from shangrla.core.NonnegMean import NonnegMean
@@ -7,6 +8,22 @@ from shangrla.core.NonnegMean import NonnegMean
 #######################################################################################################
 
 class TestAudit:
+
+    def test_summarize_status_calls_p_value_method(self):
+        complete_assertion = SimpleNamespace(p_value=lambda: 0.01)
+        incomplete_assertion = SimpleNamespace(p_value=lambda: 0.10)
+        complete_contest = SimpleNamespace(
+            risk_limit=0.05,
+            assertions={"complete": complete_assertion},
+        )
+        incomplete_contest = SimpleNamespace(
+            risk_limit=0.05,
+            assertions={"incomplete": incomplete_assertion},
+        )
+
+        assert Audit.summarize_status(
+            None, {"complete": complete_contest, "incomplete": incomplete_contest}
+        ) is False
 
     def test_from_dict(self):
         d = {
