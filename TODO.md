@@ -15,6 +15,11 @@
 - [x] Verify that AWAIRE-style requirements are implemented correctly using
       assertions and combiners, then delete `requirement.py`.
 - [ ] Document the desired end-to-end workflow for a variety of single contests
-      and implement any missing functionality needed to support it.
+      and implement any missing functionality needed to support it:
+  - [ ] Multi-candidate plurality ballot-polling
+  - [ ] Multi-candidate plurality ballot-level comparison
+  - [ ] IRV RAIRE ballot-level comparison
+  - [ ] IRV AWAIRE ballot-polling
+  - [ ] IRV AWAIRE ballot-level comparison
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
       import organization.
