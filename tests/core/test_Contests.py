@@ -3,7 +3,7 @@ import pytest
 
 
 from shangrla.core.Audit import Audit, Stratum
-from shangrla.core.contest import Contest
+from shangrla.core.contest import Contest, InstantRunoff, Plurality, Threshold
 from shangrla.core.cvr import CVR
 from shangrla.core.NonnegMean import NonnegMean
 
@@ -16,7 +16,7 @@ class TestContests:
                  'name': 'contest_1',
                  'risk_limit': 0.05,
                  'cards': 10**4,
-                 'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.PLURALITY,
+                 'choice_function': Plurality(),
                  'n_winners': 2,
                  'candidates': 5,
                  'candidates': ['alice','bob','carol','dave','erin'],
@@ -30,7 +30,7 @@ class TestContests:
                  'name': 'contest_2',
                  'risk_limit': 0.05,
                  'cards': 10**4,
-                 'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.SUPERMAJORITY,
+                 'choice_function': Threshold(threshold=2/3),
                  'n_winners': 1,
                  'candidates': 4,
                  'candidates': ['alice','bob','carol','dave'],
@@ -44,7 +44,7 @@ class TestContests:
                  'name': 'contest_3',
                  'risk_limit': 0.05,
                  'cards': 10**4,
-                 'choice_function': Contest.SOCIAL_CHOICE_FUNCTION.IRV,
+                 'choice_function': InstantRunoff(),
                  'n_winners': 1,
                  'candidates': 4,
                  'candidates': ['alice','bob','carol','dave'],
@@ -77,7 +77,8 @@ class TestContests:
         cvr_list = CVR.from_dict(cvr_dict)
         contests = Contest.from_dict_of_dicts(self.contest_dict)
         print(contests)
-        Contest.tally(contests, cvr_list)
+        with pytest.warns(UserWarning, match="has social choice function.*not tabulated"):
+            Contest.tally(contests, cvr_list)
         assert contests['AvB'].tally == {'Alice': 3, 'Bob': 2}
         assert contests['CvD'].tally == {'Candy': 5, 'Elvis': 2}
         assert contests['EvF'].tally is None 
