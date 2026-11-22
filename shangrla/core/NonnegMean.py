@@ -133,7 +133,7 @@ class NonnegMean:
             self.bet = lambda _x: lam
             return_evidence = kwargs.pop("return_evidence", False)
             if return_evidence:
-                evidence, evidence_history = self.betting_mart(
+                e_value, e_history = self.betting_mart(
                     x, return_evidence=True, **kwargs
                 )
             else:
@@ -142,7 +142,7 @@ class NonnegMean:
             self.bet = original_bet
 
         if return_evidence:
-            return evidence, evidence_history
+            return e_value, e_history
         return p, p_history
 
     def sjm(self, N: int, t: float, x: np.array) -> tuple[np.array, float, np.array, np.array]:
@@ -263,13 +263,13 @@ class NonnegMean:
         if kwargs.get("return_evidence", False):
             return max(0, np.max(terms)), np.maximum(0, terms)
 
-        evidence_history = np.maximum(0, terms)
-        p_history = np.ones_like(evidence_history)
+        e_history = np.maximum(0, terms)
+        p_history = np.ones_like(e_history)
         np.divide(
             1,
-            evidence_history,
+            e_history,
             out=p_history,
-            where=evidence_history > 0,
+            where=e_history > 0,
         )
         p_history = np.minimum(1, p_history)
         p = np.min(p_history)
@@ -771,7 +771,7 @@ class NonnegMean:
         try:
             self.eta = eta
             self.estim = self.fixed_alternative_mean
-            _evidence, evidence_history = self.alpha_mart(x, **kwargs)
+            _, p_alpha_history = self.alpha_mart(x, **kwargs)
         finally:
             self.estim = original_estim
             if original_eta is None:
@@ -779,14 +779,7 @@ class NonnegMean:
             else:
                 self.eta = original_eta
 
-        evidence_history = np.asarray(evidence_history, dtype=float)
-        p_history = np.ones_like(evidence_history)
-        np.divide(
-            1,
-            evidence_history,
-            out=p_history,
-            where=evidence_history > 0,
-        )
+        p_history = np.asarray(p_alpha_history, dtype=float)
         p_history = np.minimum(1, p_history)
         p = np.min(p_history) if random_order else p_history[-1]
         return float(min(1, p)), p_history

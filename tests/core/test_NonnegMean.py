@@ -240,29 +240,29 @@ class TestNonnegMean:
             N=10, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=0.25
         )
 
-        evidence, evidence_history = test.betting_mart(
+        e_value, e_history = test.betting_mart(
             np.ones(6), return_evidence=True
         )
-        assert np.isinf(evidence)
-        assert np.isinf(evidence_history).any()
+        assert np.isinf(e_value)
+        assert np.isinf(e_history).any()
 
         certain_below = NonnegMean(
             N=10, t=1, u=0.5, bet=NonnegMean.fixed_bet, lam=0.25
         )
-        evidence, evidence_history = certain_below.betting_mart(
+        e_value, e_history = certain_below.betting_mart(
             np.zeros(6), return_evidence=True
         )
-        assert evidence == 0
-        assert np.all(evidence_history == 0)
+        assert e_value == 0
+        assert np.all(e_history == 0)
 
     def test_betting_mart_does_not_turn_overflow_into_certainty(self):
         test = NonnegMean(
             N=np.inf, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=0.5
         )
-        evidence, evidence_history = test.betting_mart(
+        e_value, e_history = test.betting_mart(
             np.ones(1), return_evidence=True
         )
-        assert np.isfinite(evidence)
+        assert np.isfinite(e_value)
 
     def test_sjm(self):
         # test_sjm_with_replacement:

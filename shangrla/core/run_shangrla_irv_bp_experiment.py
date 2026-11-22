@@ -140,9 +140,9 @@ def merge_pvalues(assertions_dict):
     pvalue_histories = []
     for asrtn in assertions_dict:
         a = assertions_dict[asrtn]
-        phist = a.p_history
-        phist_running_min = np.minimum.accumulate(phist)
-        pvalue_histories.append(phist_running_min)
+        p_history = a.p_history
+        p_history_running_min = np.minimum.accumulate(p_history)
+        pvalue_histories.append(p_history_running_min)
     pvalue_histories_stacked = np.stack(pvalue_histories)
     pvalue_histories_merged  = np.amax(pvalue_histories_stacked, axis=0)
     return(pvalue_histories_merged)
