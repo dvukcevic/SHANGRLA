@@ -18,7 +18,7 @@
       and implement any missing functionality needed to support it:
   - [x] Plurality ballot-polling
   - [x] Plurality ballot-level comparison
-  - [ ] IRV RAIRE ballot-level comparison
+  - [x] IRV RAIRE ballot-level comparison
   - [ ] IRV AWAIRE ballot-polling
   - [ ] IRV AWAIRE ballot-level comparison
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
