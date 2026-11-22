@@ -603,8 +603,13 @@ class Assertion:
         d, u = self.mvrs_to_data(mvr_sample, cvr_sample, use_all=use_all)
         self.test.u = u  # set upper bound for the test for each assorter
 
-        _, e_history = self.test.test(d)
-        log_e_history = np.log(np.asarray(e_history, dtype=float))
+        _, p_history = self.test.test(d)
+        # Convert p-value history to log-evidence history.  EProcess stores
+        # evidence on the log scale, so p = exp(-log_evidence), which we
+        # invert to get log_evidence = -log(p).
+        p_history = np.asarray(p_history, dtype=float)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            log_e_history = -np.log(p_history)
         self.node.eprocess.append_at(log_e_history, 0)
         if self.min_p() <= self.contest.risk_limit:
             self.proved = True
