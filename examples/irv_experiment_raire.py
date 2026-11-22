@@ -144,6 +144,7 @@ contest_dict = {'1': {'name': '1',
                       'winner': [str(winner)],
                       'assertion_file': "./assertions_temp.json",
                       'assertion_json': assertions,
+                      'assertion_strategy': contest.Contest.ASSERTION_STRATEGY.RAIRE,
                       'audit_type': Audit.AUDIT_TYPE.CARD_COMPARISON,
                       'test': NonnegMean.alpha_mart,
                       'estim': NonnegMean.optimal_comparison
@@ -189,5 +190,4 @@ print(f"{name = }\n"
       f"{certified_5pct = }\n"
       # f"{counts_5pc[2]}, {counts_5pc[1]}, {counts_5pc[-1]}, {counts_5pc[-2]}"
       )
-
 

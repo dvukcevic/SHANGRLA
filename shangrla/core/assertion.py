@@ -1324,46 +1324,96 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
     handler.registry = reg
 
 
-# TODO: there are currently a few different types of IRV assertions, and they are
-#  not explicitly distinguished in the code. For example, the RAIRE style
-#  assertions are imported from JSON and have a different structure than
-#  the AWAIRE style assertions, which are generated from permutations of
-#  the candidates. Should we use an explicit signature to distinguish these types?
-#  This would be useful because later on we need to determine which type of
-#  assertion we are dealing with in order to calculate the assorter correctly,
-#  and we have to use heuristic way to determine the type of assertion.
 @link_with_scf(scc.InstantRunoff)
 def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
     root = reg.get_composite_node("root")
     root.combiner = eproc.Minimum()
     reg.set_root(root)
-    if 'assertion_json' in dir(handler.contest):  # Check if assertion_json is provided. TODO this is ugly
+    assertion_json = getattr(handler.contest, "assertion_json", None)
+    strategy = handler.contest.assertion_strategy
+    if strategy is None:
+        strategy = (
+            Contest.ASSERTION_STRATEGY.RAIRE
+            if assertion_json is not None
+            else Contest.ASSERTION_STRATEGY.AWAIRE
+        )
+        handler.contest.assertion_strategy = strategy
+    if strategy not in Contest.ASSERTION_STRATEGY.STRATEGIES:
+        raise ValueError(f"Unknown IRV assertion strategy: {strategy!r}")
+
+    if strategy == Contest.ASSERTION_STRATEGY.RAIRE:
         # RAIRE style
-        for assrtn in handler.contest.assertion_json:
+        if not isinstance(assertion_json, (list, tuple)) or not assertion_json:
+            raise ValueError(
+                "RAIRE assertion strategy requires a non-empty list of "
+                "assertions in contest.assertion_json"
+            )
+        for index, assrtn in enumerate(assertion_json):
+            if not isinstance(assrtn, dict):
+                raise ValueError(
+                    f"RAIRE assertion at index {index} must be a mapping"
+                )
+            required_fields = {"winner", "loser", "assertion_type"}
+            missing_fields = required_fields - assrtn.keys()
+            if missing_fields:
+                raise ValueError(
+                    f"RAIRE assertion at index {index} is missing fields: "
+                    f"{', '.join(sorted(missing_fields))}"
+                )
             winner = assrtn["winner"]
             loser = assrtn["loser"]
-            if assrtn["assertion_type"] == handler.WINNER_ONLY:
+            assertion_type = assrtn["assertion_type"]
+            if (
+                not isinstance(winner, str)
+                or not isinstance(loser, str)
+                or winner not in handler.candidates
+                or loser not in handler.candidates
+                or winner == loser
+            ):
+                raise ValueError(
+                    f"RAIRE assertion at index {index} must identify distinct "
+                    "winner and loser candidates in the contest"
+                )
+
+            if assertion_type == handler.WINNER_ONLY:
                 winner_cands = list(handler.candidates)
                 loser_cands = [winner, loser]
                 assrtn_id = winner + " v " + loser
-            elif assrtn["assertion_type"] == handler.IRV_ELIMINATION:
+            elif assertion_type == handler.IRV_ELIMINATION:
                 # Context is that all candidates in 'eliminated' have been
                 # eliminated and their votes distributed to later preferences
-                elim = [e for e in assrtn["already_eliminated"]]
+                elim = assrtn.get("already_eliminated", [])
+                if elim == "":
+                    elim = []
+                if (
+                    not isinstance(elim, (list, tuple))
+                    or not all(
+                        isinstance(candidate, str)
+                        and candidate in handler.candidates
+                        for candidate in elim
+                    )
+                    or winner in elim
+                    or loser in elim
+                ):
+                    raise ValueError(
+                        f"RAIRE assertion at index {index} has an invalid "
+                        "already_eliminated candidate list"
+                    )
                 remn = [c for c in handler.candidates if c not in elim]
                 winner_cands = remn
                 loser_cands = remn
                 # Identifier for tracking which assertions have been proved
                 assrtn_id = winner + " v " + loser + " elim " + " ".join(elim)
             else:
-                raise NotImplemented(
-                    f'JSON assertion type {assrtn["assertion_type"]} not implemented.'
+                raise ValueError(
+                    f"RAIRE assertion at index {index} has unsupported "
+                    f"assertion_type {assertion_type!r}"
                 )
             node, _ = reg.get_leaf_node(assrtn_id)
             root.add_child(node)
             handler.make_assertion(node, winner, loser, winner_cands, loser_cands, id=assrtn_id)
-    else:
+    elif strategy == Contest.ASSERTION_STRATEGY.AWAIRE:
         # AWAIRE style
         cands = handler.candidates  # TODO use winners+losers ?
         altorders = permutations(cands)  # representation is [..., 3rd place, runner-up, winner]
@@ -1389,4 +1439,6 @@ def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers
                     if is_new:
                         handler.make_assertion(requirement, elimc, newc, cands, [newc, elimc], id=req_name)
                 # reqs += [ReqIdent("DND", first=other, second=newc) for other in eliminated]
+    else:
+        raise ValueError(f"Unknown IRV assertion strategy: {strategy!r}")
     handler.registry = reg

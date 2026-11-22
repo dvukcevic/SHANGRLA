@@ -217,6 +217,7 @@ class TestAssertion:
                 AvB.candidates = cands
                 AvB.winner = [audit['winner']]
                 AvB.assertion_json = audit['assertions']
+                AvB.assertion_strategy = Contest.ASSERTION_STRATEGY.RAIRE
                 all_assertions = AssertionHandler(AvB).assertions
                 assertions[audit['contest']] = all_assertions
 

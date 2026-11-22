@@ -3,6 +3,13 @@
 This document collects end-to-end workflows for conducting some example
 single-contest audits using SHANGRLA.
 
+IRV contests can select assertion construction with
+`Contest.assertion_strategy`. If it is unset, SHANGRLA uses RAIRE when a
+non-`None` `assertion_json` payload is present, and AWAIRE otherwise. Set
+`Contest.ASSERTION_STRATEGY.AWAIRE` or `Contest.ASSERTION_STRATEGY.RAIRE`
+explicitly to override auto-selection. A selected RAIRE strategy requires a
+non-empty, valid `assertion_json` payload.
+
 ## Plurality ballot-polling audit
 
 The complete synthetic example is in

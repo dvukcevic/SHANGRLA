@@ -90,6 +90,7 @@ def main():
                          'winner'           : [args.WINNER],
                          'assertion_file'   : args.ASSERTIONS,
                          'assertion_json'   : assertion_json,
+                         'assertion_strategy': Contest.ASSERTION_STRATEGY.RAIRE,
                          'audit_type'       : Audit.AUDIT_TYPE.POLLING,
                          'test'             : NonnegMean.alpha_mart,
                          'estim'            : NonnegMean.shrink_trunc

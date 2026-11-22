@@ -22,6 +22,21 @@ from scipy.special import logsumexp
 # from shangrla.core.Audit import Audit
 
 
+def _validate_log_evidence(values: np.ndarray, context: str) -> None:
+    """Allow certain evidence (+inf), but reject invalid log evidence."""
+    if np.any(np.isnan(values)) or np.any(np.isneginf(values)):
+        raise ValueError(f"{context} must contain no NaN or negative infinity")
+
+
+def _evidence_difference(current: float, previous: float) -> float:
+    """Subtract log-evidence values while preserving absorbing certainty."""
+    if np.isposinf(previous):
+        if np.isposinf(current):
+            return 0.0
+        raise ValueError("Infinite log evidence cannot revert to a finite value")
+    return float(current - previous)
+
+
 def _capped_p_values(log_values):
     """Convert log-evidence values to p-values and cap them at 1."""
     values = np.asarray(log_values, dtype=float)
@@ -225,8 +240,7 @@ class Combiner(ABC):
         values = np.asarray(values, dtype=float)
         if values.ndim == 0:
             values = values.reshape(1)
-        if not np.all(np.isfinite(values)):
-            raise ValueError("Combiner values must contain only finite numbers")
+        _validate_log_evidence(values, "Combiner values")
         if self.history_length == 0:
             self.history = None
             self._prev_values = np.zeros(len(values), dtype=float)
@@ -253,8 +267,7 @@ class Combiner(ABC):
         values = np.asarray(values, dtype=float)
         if values.ndim == 0:
             values = values.reshape(1)
-        if not np.all(np.isfinite(values)):
-            raise ValueError("Combiner history values must contain only finite numbers")
+        _validate_log_evidence(values, "Combiner history values")
         if self.history_length == 0:
             self.history = None
             self._prev_values = np.zeros(len(values), dtype=float)
@@ -279,8 +292,7 @@ class Combiner(ABC):
         values = np.asarray(values, dtype=float)
         if values.ndim == 0:
             values = values.reshape(1)
-        if not np.all(np.isfinite(values)):
-            raise ValueError("History values must contain only finite numbers")
+        _validate_log_evidence(values, "History values")
         if self.history_length == 0:
             self.history = None
             if values.ndim == 0:
@@ -339,7 +351,7 @@ class Minimum(Combiner):
 
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
-        return float(np.min(values) - np.min(prev))
+        return _evidence_difference(np.min(values), np.min(prev))
 
 
 class MinOfRunningMax(Combiner):
@@ -376,8 +388,7 @@ class MinOfRunningMax(Combiner):
             raise ValueError("Running-max seed values must be a 1-D or 2-D array")
         if values.shape[0] == 0:
             return
-        if not np.all(np.isfinite(values)):
-            raise ValueError("Running-max seed values must contain only finite numbers")
+        _validate_log_evidence(values, "Running-max seed values")
         self.running_max = np.maximum(np.max(values, axis=0), np.zeros(values.shape[1], dtype=float))
 
     def __call__(self, values: np.ndarray) -> float:
@@ -402,7 +413,7 @@ class MinOfRunningMax(Combiner):
         min_running_max_old = np.min(self.running_max)
         self.running_max_update(values)
         min_running_max_new = np.min(self.running_max)
-        return float(min_running_max_new - min_running_max_old)
+        return _evidence_difference(min_running_max_new, min_running_max_old)
 
 
 class Linear(Combiner):
@@ -417,7 +428,7 @@ class Linear(Combiner):
 
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
-        return float(logsumexp(values) - logsumexp(prev))
+        return _evidence_difference(logsumexp(values), logsumexp(prev))
 
 
 class Quadratic(Combiner):
@@ -433,8 +444,16 @@ class Quadratic(Combiner):
 
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
+        if np.isposinf(prev).any():
+            return _evidence_difference(
+                np.inf if np.isposinf(values).any() else -np.inf,
+                np.inf,
+            )
         increments = values - prev
-        return float(logsumexp(increments + (prev) ** 2) - logsumexp((prev) ** 2))
+        return _evidence_difference(
+            logsumexp(increments + (prev) ** 2),
+            logsumexp((prev) ** 2),
+        )
 
 
 class Largest(Combiner):
@@ -465,10 +484,9 @@ class Largest(Combiner):
     def operate(self, values: np.ndarray) -> float:
         prev = self._prev_values if self._prev_values is not None else np.zeros(len(values), dtype=float)
         if self._use_linear_fallback:
-            return float(logsumexp(values) - logsumexp(prev))
+            return _evidence_difference(logsumexp(values), logsumexp(prev))
         k = int(np.argmax(prev))
-        increments = values - prev
-        return float(increments[k])
+        return _evidence_difference(values[k], prev[k])
 
 
 # Node classes

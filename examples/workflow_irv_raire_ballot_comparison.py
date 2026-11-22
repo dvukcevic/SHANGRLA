@@ -73,6 +73,7 @@ def create_workflow_data() -> tuple[
             "candidates": candidates,
             "winner": ["Alice"],
             "assertion_json": assertion_json,
+            "assertion_strategy": Contest.ASSERTION_STRATEGY.RAIRE,
             "audit_type": Audit.AUDIT_TYPE.CARD_COMPARISON,
             "test": NonnegMean.alpha_mart,
             "estim": NonnegMean.optimal_comparison,

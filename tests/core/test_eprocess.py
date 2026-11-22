@@ -245,11 +245,44 @@ class TestMinimumCombiner:
         with pytest.raises(ValueError, match="length"):
             combiner(np.array([1.0, 2.0]))
 
-    def test_minimum_rejects_nonfinite_values(self):
-        """Test non-finite values are rejected."""
+    def test_minimum_rejects_invalid_infinite_values(self):
+        """NaN and negative-infinite log evidence are invalid."""
         combiner = Minimum()
-        with pytest.raises(ValueError, match="finite"):
-            combiner(np.array([1.0, np.inf, 3.0]))
+        with pytest.raises(ValueError, match="negative infinity"):
+            combiner(np.array([1.0, -np.inf, 3.0]))
+        with pytest.raises(ValueError, match="NaN"):
+            combiner(np.array([1.0, np.nan, 3.0]))
+
+    def test_minimum_preserves_certain_evidence(self):
+        combiner = Minimum()
+        assert combiner(np.array([np.inf, 2.0])) == pytest.approx(2.0)
+        assert combiner(np.array([np.inf, np.inf])) == np.inf
+        assert combiner(np.array([np.inf, np.inf])) == 0.0
+
+    def test_linear_preserves_certain_evidence(self):
+        combiner = Linear()
+        assert combiner(np.array([np.inf, 2.0])) == np.inf
+        assert combiner(np.array([np.inf, 3.0])) == 0.0
+
+    def test_infinite_evidence_cannot_revert(self):
+        combiner = Linear()
+        combiner(np.array([np.inf, 2.0]))
+        with pytest.raises(ValueError, match="cannot revert"):
+            combiner(np.array([1.0, 3.0]))
+
+    @pytest.mark.parametrize(
+        "combiner",
+        [Quadratic(), Largest()],
+    )
+    def test_other_combiners_preserve_certain_evidence(self, combiner):
+        assert combiner(np.array([np.inf, 2.0])) == np.inf
+        assert combiner(np.array([np.inf, 3.0])) == 0.0
+
+    def test_min_of_running_max_preserves_certain_evidence(self):
+        combiner = MinOfRunningMax()
+        assert combiner(np.array([np.inf, 2.0])) == 2.0
+        assert combiner(np.array([np.inf, np.inf])) == np.inf
+        assert combiner(np.array([np.inf, np.inf])) == 0.0
 
 
 class TestLargestCombiner:

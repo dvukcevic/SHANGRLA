@@ -203,6 +203,12 @@ class Contest:
             NO_CANDIDATE := "NO_CANDIDATE",
         )
 
+    class ASSERTION_STRATEGY:
+        STRATEGIES = (
+            AWAIRE := "AWAIRE",
+            RAIRE := "RAIRE",
+        )
+
     ATTRIBUTES = (
         "id",
         "name",
@@ -223,6 +229,7 @@ class Contest:
         "tally",
         "sample_size",
         "sample_threshold",
+        "assertion_strategy",
     )
 
     def __init__(
@@ -248,6 +255,7 @@ class Contest:
             tally: dict = None,
             sample_size: int = None,
             sample_threshold: float = None,
+            assertion_strategy: str = None,
             **kwargs,
     ):
         self.id = id
@@ -271,6 +279,7 @@ class Contest:
         self.tally = tally
         self.sample_size = sample_size
         self.sample_threshold = sample_threshold
+        self.assertion_strategy = assertion_strategy
         self.__dict__.update(kwargs)
 
     def __str__(self):
