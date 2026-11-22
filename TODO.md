@@ -14,6 +14,14 @@
       that still specify an older version.
 - [x] Verify that AWAIRE-style requirements are implemented correctly using
       assertions and combiners, then delete `requirement.py`.
+- [ ] Fix issues to allow AWAIRE to work:
+  - [ ] Handle infinite log-evidence values when recomputing composed node
+        processes; combiners currently reject non-finite inputs, so certain
+        evidence can make AWAIRE tree recomputation fail.
+  - [ ] Add end-to-end tests for AWAIRE ballot-polling and ballot-level
+        comparison, including evidence updates and node-tree recomputation.
+  - [ ] Replace the heuristic that selects RAIRE versus AWAIRE based on whether
+        `assertion_json` exists with an explicit assertion-strategy indicator.
 - [ ] Document the desired end-to-end workflow for a variety of single contests
       and implement any missing functionality needed to support it:
   - [x] Plurality ballot-polling
@@ -23,3 +31,5 @@
   - [ ] IRV AWAIRE ballot-level comparison
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
       import organization.
+- [ ] Implement AWAIRE v2 ('incremental AWAIRE'), to avoid exhaustive
+      enumeration.
