@@ -1,4 +1,4 @@
-"""Workflow: end-to-end single-contest plurality ballot-polling audit."""
+"""Workflow: end-to-end plurality ballot-polling audit."""
 
 import numpy as np
 
@@ -14,7 +14,8 @@ def main() -> None:
     rng = np.random.default_rng(2025)
     ballots = np.concatenate([
         np.full(900, "Alice", dtype="<U5"),
-        np.full(100, "Bob", dtype="<U5"),
+        np.full(700, "Bob", dtype="<U5"),
+        np.full(400, "Candy", dtype="<U5"),
     ])
     rng.shuffle(ballots)
 
@@ -37,7 +38,7 @@ def main() -> None:
             "cards": len(ballots),
             "choice_function": Plurality(),
             "n_winners": 1,
-            "candidates": ["Alice", "Bob"],
+            "candidates": ["Alice", "Bob", "Candy"],
             "winner": ["Alice"],
             "audit_type": Audit.AUDIT_TYPE.POLLING,
             "test": NonnegMean.alpha_mart,

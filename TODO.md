@@ -16,8 +16,8 @@
       assertions and combiners, then delete `requirement.py`.
 - [ ] Document the desired end-to-end workflow for a variety of single contests
       and implement any missing functionality needed to support it:
-  - [ ] Multi-candidate plurality ballot-polling
-  - [ ] Multi-candidate plurality ballot-level comparison
+  - [x] Plurality ballot-polling
+  - [x] Plurality ballot-level comparison
   - [ ] IRV RAIRE ballot-level comparison
   - [ ] IRV AWAIRE ballot-polling
   - [ ] IRV AWAIRE ballot-level comparison

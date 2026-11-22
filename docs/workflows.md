@@ -1,11 +1,11 @@
 # Workflows
 
-This document collects end-to-end workflows for conducting and extending
-SHANGRLA audits.
+This document collects end-to-end workflows for conducting some example
+single-contest audits using SHANGRLA.
 
-## Single-contest plurality ballot-polling audit
+## Plurality ballot-polling audit
 
-The complete synthetic example is
+The complete synthetic example is in
 [`examples/workflow_plurality_ballot_polling.py`](../examples/workflow_plurality_ballot_polling.py).
 
 The workflow is:
@@ -19,5 +19,27 @@ The workflow is:
    put the MVR list in sample-selection order.
 5. Call `contest.assertions.set_p_values(mvr_sample)` after each set of
    manual results.
+6. Call `audit.summarize_status(contests)` to determine whether all assertions
+   have crossed the risk limit or whether the audit needs more ballots.
+
+## Plurality ballot-level comparison audit
+
+The complete synthetic example is in
+[`examples/workflow_plurality_ballot_comparison.py`](../examples/workflow_plurality_ballot_comparison.py).
+It includes one reported vote for Alice that the manual examination corrects to
+a vote for Bob.
+
+The workflow is:
+
+1. Create one `Audit` and one `Contest`, with
+   `Audit.AUDIT_TYPE.CARD_COMPARISON`.
+2. Create the contest assertions with `make_all_assertions(contests)`.
+3. Construct reported CVRs, tally them, and set each assertion's comparison
+   margin with `set_all_margins_from_cvrs(audit, cvrs)`.
+4. Draw a random sample of CVRs and create matching MVRs, including each
+   ballot's manually interpreted vote.
+5. Call `CVR.prep_comparison_sample(mvr_sample, cvr_sample, sample_order)` to
+   put both lists in the same selection order, then update assertion evidence
+   with `contest.assertions.set_p_values(mvr_sample, cvr_sample, use_all=True)`.
 6. Call `audit.summarize_status(contests)` to determine whether all assertions
    have crossed the risk limit or whether the audit needs more ballots.
