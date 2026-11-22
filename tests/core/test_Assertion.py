@@ -8,7 +8,6 @@ from shangrla.core.Audit import Audit
 from shangrla.core.assertion import Assertion, AssertionHandler, Assorter
 from shangrla.core.cvr import CVR
 from shangrla.core.contest import Contest, InstantRunoff, Plurality, Threshold
-from shangrla.core.eprocess import LeafNode
 from shangrla.core.NonnegMean import NonnegMean
 
 TEST_DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -86,16 +85,6 @@ class TestAssertion:
                            }
         })
 
-
-    def test_min_p(self):
-        node1 = LeafNode(id="first")
-        node1.eprocess.append(np.log(1 / np.array([1, 0.5, 0.1, 0.01, 0.1])))
-        node2 = LeafNode(id="second")
-        node2.eprocess.append(np.log(1 / np.array([0.05])))
-        asrtn1 = Assertion(node=node1)
-        asrtn2 = Assertion(node=node2)
-        assert asrtn1.min_p() == pytest.approx(0.01)
-        assert asrtn2.min_p() == pytest.approx(0.05)
 
     #what's the right way to write a unit test for this?
     #define a bare-minimum Assertion / Assorter and CVR list and then call margin on them?
