@@ -43,6 +43,25 @@ class TestAudit:
 
         assert Audit.summarize_status(None, {"mayor": contest}) is False
 
+    def test_summarize_status_uses_composed_root_for_awaire(self):
+        import numpy as np
+        from types import SimpleNamespace
+
+        from shangrla.core.eprocess import CompositeNode, LeafNode, Minimum
+
+        root = CompositeNode("root", combiner=Minimum())
+        component = LeafNode("alternative")
+        component.eprocess.append(np.array([np.log(1 / 0.01)]))
+        root.add_child(component)
+        root.eprocess.append(np.array([np.log(1 / 0.01)]))
+        handler = SimpleNamespace(
+            items=lambda: [("requirement", SimpleNamespace(p_value=lambda: 0.5))],
+            registry=SimpleNamespace(root=root),
+        )
+        contest = SimpleNamespace(risk_limit=0.05, assertions=handler)
+
+        assert Audit.summarize_status(None, {"mayor": contest}) is True
+
     def test_from_dict(self):
         d = {
          'seed':           12345678901234567890,

@@ -342,9 +342,6 @@ class Audit:
         with open(log_file, "w") as f:
             f.write(json.dumps(out, cls=NpEncoder))
 
-    # TODO: This doesn't use the root node of the audit tree, but looks
-    #  through all of the assertions on its own. We should make it use the
-    #  root node of the audit tree.
     def summarize_status(self, contests: dict = None):
         """
         Determine whether the audit of individual assertions, contests, and the whole election are finished.
@@ -366,11 +363,17 @@ class Audit:
         done = True
         for c, con in contests.items():
             print(f"\np-values for assertions in contest {c}")
-            cpmax = 0
+            handler = con.assertions
+            registry = getattr(handler, "registry", None)
+            root = getattr(registry, "root", None)
+            cpmax = 1.0 if root is not None and len(root) == 0 else 0.0
             for i, a in con.assertions.items():
                 p_value = a.p_value()
-                cpmax = np.max([cpmax, p_value])
+                if root is None:
+                    cpmax = np.max([cpmax, p_value])
                 print(f"\t{i}: {p_value}")
+            if root is not None and len(root) > 0:
+                cpmax = root.get_p_value()
             if cpmax <= contests[c].risk_limit:
                 print(
                     f"\ncontest {c} AUDIT COMPLETE at risk limit {con.risk_limit}. Measured risk {cpmax}"
@@ -380,11 +383,26 @@ class Audit:
                 print(
                     f"\ncontest {c} audit INCOMPLETE at risk limit {con.risk_limit}. Measured risk {cpmax}"
                 )
-                print("assertions remaining to be proved:")
-                for i, a in con.assertions.items():
-                    p_value = a.p_value()
+                print("audit components remaining to be proved:")
+                components = root.children if root is not None else None
+                if components is None:
+                    components = [
+                        (assertion_id, assertion)
+                        for assertion_id, assertion in con.assertions.items()
+                    ]
+                for component in components:
+                    if isinstance(component, tuple):
+                        component_id, assertion = component
+                        p_value = assertion.p_value()
+                    else:
+                        component_id = component.id
+                        p_value = (
+                            1.0
+                            if len(component) == 0
+                            else component.get_p_value()
+                        )
                     if p_value > con.risk_limit:
-                        print(f"\t{i}\t{a}: current risk {p_value}")
+                        print(f"\t{component_id}: current risk {p_value}")
         return done
 
     @classmethod
@@ -402,4 +420,3 @@ class Audit:
         d["strata"] = strat_obj
         a.__dict__.update(d)
         return a
-
