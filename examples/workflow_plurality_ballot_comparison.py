@@ -9,7 +9,10 @@ from shangrla.core.contest import Contest, Plurality
 from shangrla.core.cvr import CVR
 
 
-def main() -> None:
+def create_workflow_data() -> tuple[
+    Audit, dict[str, Contest], list[CVR], list[CVR], list[CVR]
+]:
+    """Create the audit setup and comparison samples for interactive inspection."""
     # Generate true ballots, then introduce one reported vote for the wrong candidate.
     rng = np.random.default_rng(2026)
     manual_votes = np.concatenate([
@@ -56,17 +59,11 @@ def main() -> None:
 
     # 3. Construct the reported CVRs and set comparison margins from their tally.
     cvrs = CVR.from_dict([
-        {
-            "id": str(index),
-            "votes": {"mayor": {candidate: True}},
-        }
+        {"id": str(index), "votes": {"mayor": {candidate: True}}}
         for index, candidate in enumerate(reported_votes)
     ])
     manual_cvrs = CVR.from_dict([
-        {
-            "id": str(index),
-            "votes": {"mayor": {candidate: True}},
-        }
+        {"id": str(index), "votes": {"mayor": {candidate: True}}}
         for index, candidate in enumerate(manual_votes)
     ])
     Contest.tally(contests, cvrs)
@@ -86,6 +83,17 @@ def main() -> None:
     }
     CVR.prep_comparison_sample(mvr_sample, cvr_sample, sample_order)
 
+    return audit, contests, cvrs, mvr_sample, cvr_sample
+
+
+def run_workflow(
+    audit: Audit,
+    contests: dict[str, Contest],
+    mvr_sample: list[CVR],
+    cvr_sample: list[CVR],
+) -> None:
+    """Calculate comparison evidence and report the audit status."""
+
     # 5. Update assertion evidence using each manual vote and its reported CVR.
     contests["mayor"].assertions.set_p_values(
         mvr_sample, cvr_sample, use_all=True
@@ -93,6 +101,11 @@ def main() -> None:
 
     # 6. Report whether every assertion is below the contest risk limit.
     audit.summarize_status(contests)
+
+
+def main() -> None:
+    audit, contests, _, mvr_sample, cvr_sample = create_workflow_data()
+    run_workflow(audit, contests, mvr_sample, cvr_sample)
 
 
 if __name__ == "__main__":

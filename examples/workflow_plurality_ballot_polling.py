@@ -9,7 +9,8 @@ from shangrla.core.contest import Contest, Plurality
 from shangrla.core.cvr import CVR
 
 
-def main() -> None:
+def create_workflow_data() -> tuple[Audit, dict[str, Contest], list[CVR], list[CVR]]:
+    """Create the audit setup and polling sample for interactive inspection."""
     # Generate a synthetic reported tally for a single plurality contest.
     rng = np.random.default_rng(2025)
     ballots = np.concatenate([
@@ -72,11 +73,25 @@ def main() -> None:
         for index, cvr in enumerate(sample)
     })
 
+    return audit, contests, cvrs, sample
+
+
+def run_workflow(
+    audit: Audit,
+    contests: dict[str, Contest],
+    sample: list[CVR],
+) -> None:
+    """Calculate polling evidence and report the audit status."""
     # 5. Update the assertion evidence with the manual vote records.
     contests["mayor"].assertions.set_p_values(sample)
 
     # 6. Report whether every assertion is below the contest risk limit.
     audit.summarize_status(contests)
+
+
+def main() -> None:
+    audit, contests, _, sample = create_workflow_data()
+    run_workflow(audit, contests, sample)
 
 
 if __name__ == "__main__":
