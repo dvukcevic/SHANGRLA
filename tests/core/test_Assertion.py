@@ -2,6 +2,7 @@ import math
 import numpy as np
 import sys
 import pytest
+from pathlib import Path
 
 from shangrla.core.Audit import Audit
 from shangrla.core.assertion import Assertion, AssertionHandler, Assorter
@@ -9,6 +10,8 @@ from shangrla.core.cvr import CVR
 from shangrla.core.contest import Contest, InstantRunoff, Plurality, Threshold
 from shangrla.core.eprocess import LeafNode
 from shangrla.core.NonnegMean import NonnegMean
+
+TEST_DATA_DIR = Path(__file__).resolve().parent / "data"
 
 ######################################################################################
 class TestAssertion:
@@ -205,7 +208,8 @@ class TestAssertion:
 
     def test_rcv_assorter(self):
         import json
-        with open('./tests/core/data/334_361_vbm.json') as fid:
+        data_file = TEST_DATA_DIR / "334_361_vbm.json"
+        with data_file.open(encoding="utf-8") as fid:
             data = json.load(fid)
             AvB = Contest.from_dict({'id': 'AvB',
                      'name': 'AvB',

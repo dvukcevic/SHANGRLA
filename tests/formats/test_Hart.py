@@ -1,16 +1,20 @@
 import pandas as pd
 import sys
 import pytest
+from pathlib import Path
 
 from shangrla.core.cvr import CVR
 from shangrla.formats.Hart import Hart
 
 
+TEST_DATA_DIR = Path(__file__).resolve().parent.parent / "core" / "data"
+
 
 ######################################################################################
 class TestHart:
     def test_read_cvrs_directory(self):
-        cvr_list = Hart.read_cvrs_directory("tests/core/data/Hart_CVRs")
+        cvr_directory = TEST_DATA_DIR / "Hart_CVRs"
+        cvr_list = Hart.read_cvrs_directory(str(cvr_directory))
         cvr_1 = cvr_list[0]
         cvr_2 = cvr_list[1]
         assert list(cvr_1.votes.keys()) == ["PRESIDENT","GOVERNOR","MAYOR"]
@@ -19,7 +23,7 @@ class TestHart:
         assert cvr_2.get_vote_for("PRESIDENT", "George Washington")
 
     def test_read_cvrs_zip(self):
-        cvr_list = Hart.read_cvrs_zip("tests/core/data/Hart_CVRs.zip")
+        cvr_list = Hart.read_cvrs_zip(TEST_DATA_DIR / "Hart_CVRs.zip")
         cvr_1 = cvr_list[0]
         cvr_2 = cvr_list[1]
         assert list(cvr_1.votes.keys()) == ["PRESIDENT","GOVERNOR","MAYOR"]
@@ -30,14 +34,14 @@ class TestHart:
 
     def test_prep_manifest(self):
         # without phantoms
-        manifest_f = pd.read_excel("tests/core/data/Hart_manifest.xlsx")
+        manifest_f = pd.read_excel(TEST_DATA_DIR / "Hart_manifest.xlsx")
         max_cards = 1141765
         n_cvrs = 1141765
         manifest, manifest_cards, phantoms = Hart.prep_manifest(manifest_f, max_cards, n_cvrs)
         assert manifest['Number of Ballots'].astype(int).sum() == max_cards
         assert phantoms == 0
         # with phantoms
-        manifest_f = pd.read_excel("tests/core/data/Hart_manifest.xlsx")
+        manifest_f = pd.read_excel(TEST_DATA_DIR / "Hart_manifest.xlsx")
         max_cards = 1500000
         manifest, manifest_cards, phantoms = Hart.prep_manifest(manifest_f, max_cards, n_cvrs)
         assert manifest['Number of Ballots'].astype(int).sum() == max_cards

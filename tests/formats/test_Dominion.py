@@ -8,6 +8,8 @@ from shangrla.core.cvr import CVR
 
 ##########################################################################################
 
+TEST_DATA_DIR = Path(__file__).resolve().parent.parent / "core" / "data"
+
 
 class TestDominion:
     def test_read_cvrs_old_format_rules_not_enforced(self):
@@ -15,7 +17,7 @@ class TestDominion:
         Test reading the older Dominion CVR format without rules enforced
         """
         cvr_list = Dominion.read_cvrs(
-            "tests/core/data/Dominion_CVRs/test_5.2.18.2.Dominion.json",
+            TEST_DATA_DIR / "Dominion_CVRs" / "test_5.2.18.2.Dominion.json",
             use_current=False,
             enforce_rules=False,
             pool_groups=[1],
@@ -48,7 +50,7 @@ class TestDominion:
         Ingests the older Dominion CVR format
         """
         cvr_list = Dominion.read_cvrs(
-            "tests/core/data/Dominion_CVRs/test_5.2.18.2.Dominion.json",
+            TEST_DATA_DIR / "Dominion_CVRs" / "test_5.2.18.2.Dominion.json",
         )
         assert len(cvr_list) == 2
         cvr_1, cvr_2 = cvr_list
@@ -81,7 +83,7 @@ class TestDominion:
         Test reading the newer Dominion CVR format
         """
         cvr_list = Dominion.read_cvrs(
-            "tests/core/data/Dominion_CVRs/test_5.10.50.85.Dominion.json",
+            TEST_DATA_DIR / "Dominion_CVRs" / "test_5.10.50.85.Dominion.json",
             use_current=False,
             enforce_rules=False,
         )
@@ -106,7 +108,7 @@ class TestDominion:
         Ingests the newer Dominion CVR format
         """
         cvr_list = Dominion.read_cvrs(
-            "tests/core/data/Dominion_CVRs/test_5.10.50.85.Dominion.json",
+            TEST_DATA_DIR / "Dominion_CVRs" / "test_5.10.50.85.Dominion.json",
         )
         assert len(cvr_list) == 3
         cvr_1, cvr_2, cvr_3 = cvr_list
@@ -137,7 +139,7 @@ class TestDominion:
         Test reading the newer Dominion CVR format, selecting VBM results only
         """
         cvr_list = Dominion.read_cvrs(
-            "tests/core/data/Dominion_CVRs/test_5.10.50.85.Dominion.json",
+            TEST_DATA_DIR / "Dominion_CVRs" / "test_5.10.50.85.Dominion.json",
             use_current=False,
             include_groups=[2],
         )
@@ -155,7 +157,7 @@ class TestDominion:
         Tests the convenience function for reading all CVRs from a given directory
         """
         cvr_list = Dominion.read_cvrs_directory(
-            "tests/core/data/Dominion_CVRs/CVR_Export", pool_groups=[2]
+            TEST_DATA_DIR / "Dominion_CVRs" / "CVR_Export", pool_groups=[2]
         )
         assert len(cvr_list) == 2
         cvr_1, cvr_2 = cvr_list
