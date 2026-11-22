@@ -784,6 +784,14 @@ class AssertionHandler:
     def build_assertion_handler(self):
         get_assertion_builder(self.scf)(self, self.winners, self.losers)
 
+    def items(self):
+        """Return assertion entries for compatibility with contest-wide audit loops."""
+        return self.assertions.items()
+
+    def values(self):
+        """Return assertions for compatibility with contest-wide audit loops."""
+        return self.assertions.values()
+
     def set_all_margins_from_cvrs(  # TODO this should be called by Audit class looping over contests
         self,
         audit: Audit = None,

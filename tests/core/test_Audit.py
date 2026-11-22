@@ -25,6 +25,24 @@ class TestAudit:
             None, {"complete": complete_contest, "incomplete": incomplete_contest}
         ) is False
 
+    def test_summarize_status_accepts_assertion_handler(self):
+        from shangrla.core.assertion import AssertionHandler
+        from shangrla.core.contest import Contest, Plurality
+
+        contest = Contest(
+            id="mayor",
+            risk_limit=0.05,
+            cards=100,
+            choice_function=Plurality(),
+            candidates=["Alice", "Bob"],
+            winner=["Alice"],
+            audit_type=Audit.AUDIT_TYPE.POLLING,
+            test=NonnegMean.alpha_mart,
+        )
+        contest.assertions = AssertionHandler(contest)
+
+        assert Audit.summarize_status(None, {"mayor": contest}) is False
+
     def test_from_dict(self):
         d = {
          'seed':           12345678901234567890,
