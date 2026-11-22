@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 
 from shangrla.formats.Dominion import Dominion
-from shangrla.core.Audit import CVR
+from shangrla.core.cvr import CVR
 
 ##########################################################################################
 

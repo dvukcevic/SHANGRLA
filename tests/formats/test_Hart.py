@@ -2,7 +2,7 @@ import pandas as pd
 import sys
 import pytest
 
-from shangrla.core.Audit import CVR
+from shangrla.core.cvr import CVR
 from shangrla.formats.Hart import Hart
 
 

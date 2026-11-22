@@ -5,7 +5,8 @@ import pytest
 
 from shangrla.core.Audit import Audit
 from shangrla.core.assertion import Assertion, AssertionHandler, Assorter
-from shangrla.core.contest import Contest, CVR, InstantRunoff, Plurality, Threshold
+from shangrla.core.cvr import CVR
+from shangrla.core.contest import Contest, InstantRunoff, Plurality, Threshold
 from shangrla.core.eprocess import LeafNode
 from shangrla.core.NonnegMean import NonnegMean
 

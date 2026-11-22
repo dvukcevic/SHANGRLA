@@ -8,7 +8,8 @@ from itertools import permutations
 
 from shangrla.core.NonnegMean import NonnegMean
 from shangrla.core.Audit import Stratum, NpEncoder, Audit
-from shangrla.core.contest import CVR, Contest
+from shangrla.core.cvr import CVR
+from shangrla.core.contest import Contest
 import shangrla.core.contest as scc
 from shangrla.core.eprocess import NodeRegistry
 import shangrla.core.eprocess as eproc

@@ -5,7 +5,10 @@ import argparse
 import os
 from pathlib import Path
 
-from shangrla.core.Audit      import Audit, Assertion, Contest, CVR
+from shangrla.core.Audit import Audit
+from shangrla.core.cvr import CVR
+from shangrla.core.contest import Contest
+from shangrla.core.assertion import Assertion
 from shangrla.core.NonnegMean import NonnegMean
 
 

@@ -10,7 +10,8 @@ import re
 import glob
 from collections.abc import Collection
 from collections import defaultdict
-from shangrla.core.Audit import Audit, CVR
+from shangrla.core.Audit import Audit
+from shangrla.core.cvr import CVR
 from shangrla.core.NonnegMean import NonnegMean
 
 

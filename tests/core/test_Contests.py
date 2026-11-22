@@ -2,7 +2,9 @@ import sys
 import pytest
 
 
-from shangrla.core.Audit import Audit, Contest, CVR, Stratum
+from shangrla.core.Audit import Audit, Stratum
+from shangrla.core.contest import Contest
+from shangrla.core.cvr import CVR
 from shangrla.core.NonnegMean import NonnegMean
 
 ###################################################################################################
