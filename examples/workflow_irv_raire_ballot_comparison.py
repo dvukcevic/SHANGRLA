@@ -37,6 +37,7 @@ def create_workflow_data() -> tuple[
     )
     reported_rankings[error_index] = ("Desert", "Bob", "Alice")
 
+    # 1. Generate RAIRE assertions for the reported winner.
     # RAIRE uses zero-based ranks; SHANGRLA CVRs use positive ranks.
     raire_cvrs = {
         str(index): {
@@ -52,6 +53,7 @@ def create_workflow_data() -> tuple[
     )
     assertion_json = [assertion.to_json() for assertion in raire_assertions]
 
+    # 2. Configure the audit and RAIRE comparison contest.
     audit = Audit.from_dict({
         "seed": 93686630803205229070,
         "strata": {
@@ -81,8 +83,12 @@ def create_workflow_data() -> tuple[
         }
     })
     audit.check_audit_parameters(contests)
+
+    # 3. Create the SHANGRLA assertions from the generated RAIRE JSON.
     make_all_assertions(contests)
 
+    # 4. Construct reported CVRs and matching manually interpreted MVRs.
+    # The reported ranking has one known discrepancy from the manual ranking.
     cvrs = CVR.from_dict([
         {
             "id": str(index),
@@ -107,8 +113,11 @@ def create_workflow_data() -> tuple[
         }
         for index, ranking in enumerate(manual_rankings)
     ])
+
+    # 5. Set comparison margins from the reported CVRs.
     contests[contest_id].assertions.set_all_margins_from_cvrs(audit, cvrs)
 
+    # 6. Draw a paired sample and put both lists in comparison-selection order.
     sample_indices = rng.choice(
         np.delete(np.arange(len(cvrs)), error_index), size=24, replace=False
     ).tolist()
@@ -132,9 +141,13 @@ def run_workflow(
     cvr_sample: list[CVR],
 ) -> None:
     """Calculate comparison evidence and report the audit status."""
+
+    # 7. Update evidence for every RAIRE assertion.
     contests["mayor"].assertions.set_p_values(
         mvr_sample, cvr_sample, use_all=True
     )
+
+    # 8. Report whether the RAIRE assertion set has reached the risk limit.
     audit.summarize_status(contests)
 
 

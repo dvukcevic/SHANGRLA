@@ -21,7 +21,7 @@
         comparison, including evidence updates and node-tree recomputation.
   - [x] Replace the heuristic that selects RAIRE versus AWAIRE based on whether
         `assertion_json` exists with an explicit assertion-strategy indicator.
-- [ ] Document the desired end-to-end workflow for a variety of single contests
+- [x] Document the desired end-to-end workflow for a variety of single contests
       and implement any missing functionality needed to support it:
   - [x] Plurality ballot-polling
   - [x] Plurality ballot-level comparison

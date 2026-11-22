@@ -51,6 +51,33 @@ The workflow is:
 6. Call `audit.summarize_status(contests)` to determine whether all assertions
    have crossed the risk limit or whether the audit needs more ballots.
 
+## IRV RAIRE ballot-level comparison audit
+
+The complete synthetic example is in
+[`examples/workflow_irv_raire_ballot_comparison.py`](../examples/workflow_irv_raire_ballot_comparison.py).
+
+The workflow is:
+
+1. Construct a RAIRE contest and use `compute_raire_assertions` to generate
+   the assertion JSON for the reported winner.
+2. Create one `Audit` and one `Contest`, with
+   `Audit.AUDIT_TYPE.CARD_COMPARISON` and
+   `Contest.ASSERTION_STRATEGY.RAIRE`. Pass the generated JSON as
+   `assertion_json`; an explicit RAIRE strategy requires non-empty, valid
+   assertion JSON.
+3. Create the SHANGRLA assertions with `make_all_assertions(contests)`.
+4. Construct the reported CVRs and matching manually interpreted MVRs. RAIRE
+   rankings use zero-based ranks, while SHANGRLA CVRs use positive ranks.
+5. Set comparison margins from the reported CVRs with
+   `contest.assertions.set_all_margins_from_cvrs(audit, cvrs)`.
+6. Draw a random paired sample and call
+   `CVR.prep_comparison_sample(mvr_sample, cvr_sample, sample_order)` to put
+   both lists in selection order.
+7. Call `contest.assertions.set_p_values(mvr_sample, cvr_sample, use_all=True)`
+   to update the evidence for every RAIRE assertion.
+8. Call `audit.summarize_status(contests)` to determine whether the RAIRE
+   assertion set has reached the risk limit or needs more ballots.
+
 ## IRV AWAIRE ballot-polling audit
 
 The complete synthetic example is in
