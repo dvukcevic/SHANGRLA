@@ -27,7 +27,7 @@
   - [x] Plurality ballot-level comparison
   - [x] IRV RAIRE ballot-level comparison
   - [x] IRV AWAIRE ballot-polling
-  - [ ] IRV AWAIRE ballot-level comparison
+  - [x] IRV AWAIRE ballot-level comparison
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
       import organization.
 - [ ] Review the use of IRV 'assertion strategies' and try to unify them, so
