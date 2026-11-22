@@ -325,6 +325,34 @@ class TestAssertion:
             votes = CVR.from_vote({'28': 1, '50': 2})
             assert assorter.assort(votes) == 0.5, f'{assorter.assort(votes)=}'
 
+    def test_awaire_style_irv_requirements(self):
+        contest = Contest(
+            id="AvB",
+            choice_function=InstantRunoff(),
+            candidates=["Alice", "Bob", "Candy"],
+            winner=["Alice"],
+            cards=100,
+            audit_type=Audit.AUDIT_TYPE.POLLING,
+            test=NonnegMean.alpha_mart,
+        )
+        handler = AssertionHandler(contest)
+
+        dnd_ids = [name for name in handler.assertions if "DND" in name]
+        db_ids = [name for name in handler.assertions if " DB " in name]
+        assert dnd_ids
+        assert db_ids
+
+        dnd = next(
+            assertion
+            for name, assertion in handler.assertions.items()
+            if name == "Bob DND Candy"
+        )
+        assert dnd.assorter.assort(CVR.from_vote({"Bob": 1})) == 1
+        assert dnd.assorter.assort(CVR.from_vote({"Candy": 1})) == 0
+        assert dnd.assorter.assort(CVR.from_vote({"Alice": 1, "Bob": 2})) == 1 / 2
+        assert dnd.assorter.assort(CVR.from_vote({"Alice": 1, "Bob": 2, "Candy": 3})) == 0
+        assert dnd.assorter.assort(CVR.from_vote({})) == 1 / 2
+
     def test_set_tally_pool_means(self):
         cvr_dicts = [{'id': 1, 'tally_pool': '1', 'pool': True, 'votes': {'AvB': {'Alice': 1}, 'CvD': {'Candy':True}}},
                      {'id': 2, 'tally_pool': '1', 'pool': True, 'votes': {'CvD': {'Elvis':True, 'Candy':False}, 'EvF': {}}},

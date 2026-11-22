@@ -1300,6 +1300,14 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
     handler.registry = reg
 
 
+# TODO: there are currently a few different types of IRV assertions, and they are
+#  not explicitly distinguished in the code. For example, the RAIRE style
+#  assertions are imported from JSON and have a different structure than
+#  the AWAIRE style assertions, which are generated from permutations of
+#  the candidates. Should we use an explicit signature to distinguish these types?
+#  This would be useful because later on we need to determine which type of
+#  assertion we are dealing with in order to calculate the assorter correctly,
+#  and we have to use heuristic way to determine the type of assertion.
 @link_with_scf(scc.InstantRunoff)
 def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
@@ -1332,13 +1340,14 @@ def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers
             root.add_child(node)
             handler.make_assertion(node, winner, loser, winner_cands, loser_cands, id=assrtn_id)
     else:
+        # AWAIRE style
         cands = handler.candidates  # TODO use winners+losers ?
         altorders = permutations(cands)  # representation is [..., 3rd place, runner-up, winner]
         for altorder in altorders:
             if altorder[-1] in winners:  # TODO only supports one winner, throw exception somewhere
                 continue  # skip non-altorders
             node = reg.get_composite_node(str(altorder))
-            node.combiner = eproc.Linear()
+            node.combiner = eproc.Linear()  # TODO: this is hardcoded but should be set somewhere else?
             root.add_child(node)
             for i, newc in enumerate(altorder):
                 remaining = frozenset(altorder[i:])

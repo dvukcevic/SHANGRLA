@@ -138,9 +138,47 @@ class InstantRunoff(SocialChoiceFunction):
         if loser_cands is None:
             loser_cands = winner_cands
 
+        # Ordinary IRV assertions compare two candidates across equal
+        # remaining-candidate sets.  These include WINNER_ONLY assertions
+        # and IRV_ELIMINATION assertions with an explicit set of candidates
+        # eliminated before the comparison.  The code at the bottom of this
+        # function handles those cases.
+
+        # This section of code handles AWAIRE DND assertions (requirements),
+        # which compare two candidates across unequal remaining-candidate
+        # sets.
+        #
+        # An AWAIRE DND requirement is asymmetric: the first candidate must
+        # never be eliminated while testing the second candidate.
+        if (
+            loser_cands is not None
+            and len(loser_cands) == 2
+            and set(loser_cands) == {winner, loser}
+            and set(winner_cands) != set(loser_cands)
+        ):
+            rank_winner = c.get_vote_for(contest_id, winner)
+            rank_loser = c.get_vote_for(contest_id, loser)
+            if rank_winner and (
+                not rank_loser or rank_winner < rank_loser
+            ):
+                for candidate in winner_cands:
+                    if candidate in (winner, loser):
+                        continue
+                    rank_candidate = c.get_vote_for(contest_id, candidate)
+                    if rank_candidate and rank_candidate < rank_winner:
+                        if rank_loser:
+                            return 0
+                        return 1 / 2
+                return 1
+            if rank_loser:
+                return 0
+            return 1 / 2
+
+        # The following code handles ordinary IRV assertions, which
+        # compare two candidates across equal remaining-candidate sets.
+        # See earlier comments, above.
         winr = c.rcv_votefor_cand(contest_id, winner, winner_cands)
         losr = c.rcv_votefor_cand(contest_id, loser, loser_cands)
-
         return (winr - losr + 1) / 2
 
 
