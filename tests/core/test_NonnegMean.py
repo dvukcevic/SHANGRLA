@@ -227,6 +227,14 @@ class TestNonnegMean:
                 x = val*np.ones(n)
                 np.testing.assert_almost_equal(test.betting_mart(x)[0], 1/(1+lam*(val-t))**n)
 
+    def test_converted_p_values_are_capped_at_one(self):
+        test = NonnegMean(
+            N=np.inf, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=-0.25
+        )
+        p, p_history = test.betting_mart(np.zeros(3))
+        assert p <= 1
+        assert np.all(p_history <= 1)
+
     def test_betting_mart_infinite_evidence_only_when_certain(self):
         test = NonnegMean(
             N=10, t=0.5, u=1, bet=NonnegMean.fixed_bet, lam=0.25

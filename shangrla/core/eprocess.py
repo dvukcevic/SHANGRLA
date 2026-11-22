@@ -22,6 +22,14 @@ from scipy.special import logsumexp
 # from shangrla.core.Audit import Audit
 
 
+def _capped_p_values(log_values):
+    """Convert log-evidence values to p-values and cap them at 1."""
+    values = np.asarray(log_values, dtype=float)
+    with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+        converted = np.exp(-values)
+    return np.minimum(1.0, converted)
+
+
 @dataclass
 class EProcess:
     """
@@ -153,7 +161,7 @@ class EProcess:
 
     def p_history(self):
         """Return the p-values corresponding to the stored log-values (1/exp(values))."""
-        return 1 / np.exp(self._values)
+        return _capped_p_values(self._values)
 
     def p_value(self):
         """Return the latest p-value (based on the last stored log-value).
@@ -165,7 +173,7 @@ class EProcess:
         """
         if len(self._values) == 0:
             raise ValueError("Cannot get p_value of empty EProcess")
-        return 1 / np.exp(self._values[-1])
+        return float(_capped_p_values(self._values[-1]))
 
     def min_p_value(self):
         """Return the smallest p-value observed so far (based on running_max).
@@ -177,7 +185,7 @@ class EProcess:
         """
         if self.running_max == -np.inf:
             raise ValueError("No values have been added to this EProcess yet")
-        return 1 / np.exp(self.running_max)
+        return float(_capped_p_values(self.running_max))
 
 
 class Combiner(ABC):
@@ -463,7 +471,7 @@ class Node(ABC):
         """Return the p-value corresponding to the most recent log-value in the eprocess."""
         if len(self.eprocess) == 0:
             raise ValueError(f"{type(self).__name__} has no values")
-        return 1 / np.exp(self.eprocess[-1])
+        return float(_capped_p_values(self.eprocess[-1]))
 
     def get_min_p_value(self):
         """Return the minimum p-value observed for this node (from running_max)."""
@@ -471,7 +479,7 @@ class Node(ABC):
             raise ValueError(f"{type(self).__name__} has no values")
         if self.eprocess.running_max == -np.inf:
             raise ValueError(f"{type(self).__name__} has no values")
-        return 1 / np.exp(self.eprocess.running_max)
+        return float(_capped_p_values(self.eprocess.running_max))
 
     def __len__(self):
         return len(self.eprocess)

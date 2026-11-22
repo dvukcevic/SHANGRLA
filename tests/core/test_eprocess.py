@@ -152,6 +152,13 @@ class TestEProcess:
         expected = 1 / np.exp(values)
         np.testing.assert_array_almost_equal(p_vals, expected)
 
+    def test_p_values_are_capped_at_one(self):
+        """Test p-value conversions cap weak evidence at one."""
+        eproc = EProcess(_values=np.array([-2.0, 0.0, 1.0]))
+        np.testing.assert_array_equal(eproc.p_history(), np.array([1.0, 1.0, np.exp(-1)]))
+        assert eproc.p_value() == pytest.approx(np.exp(-1))
+        assert eproc.min_p_value() == pytest.approx(np.exp(-1))
+
     def test_p_value_latest(self):
         """Test p_value returns the latest value"""
         eproc = EProcess(_values=np.array([0, 1, 2]))

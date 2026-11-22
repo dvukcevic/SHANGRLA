@@ -3,7 +3,7 @@
 - [x] Make legacy test processes special cases of `alpha_mart`.
 - [x] Handle certainty and infinite evidence, including verifying that evidence is
       returned as `inf` only when the result is certain.
-- [ ] Cap converted p-values at 1.
+- [x] Cap converted p-values at 1.
 - [ ] Thoroughly test `MinOfRunningMax` and verify that retaining only partial
       history still produces correct calculations.
 - [ ] Move CVR functionality into a separate module, apart from contest and

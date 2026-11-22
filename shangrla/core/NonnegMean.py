@@ -659,8 +659,8 @@ class NonnegMean:
             )
 
         p_history = np.cumprod((t + g) / (x + g))
-        p = np.min(p_history) if random_order else p_history[-1]
         p_history = np.minimum(p_history, 1)
+        p = np.min(p_history) if random_order else p_history[-1]
         return float(min(1, p)), p_history
 
     def kaplan_wald(self, x: np.array, **kwargs) -> tuple[float, np.array]:
@@ -780,7 +780,14 @@ class NonnegMean:
                 self.eta = original_eta
 
         evidence_history = np.asarray(evidence_history, dtype=float)
-        p_history = np.minimum(1, 1 / evidence_history)
+        p_history = np.ones_like(evidence_history)
+        np.divide(
+            1,
+            evidence_history,
+            out=p_history,
+            where=evidence_history > 0,
+        )
+        p_history = np.minimum(1, p_history)
         p = np.min(p_history) if random_order else p_history[-1]
         return float(min(1, p)), p_history
 
