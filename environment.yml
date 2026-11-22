@@ -6,7 +6,7 @@
 
 name: shangrla
 dependencies:
-  - python>=3.10.4
+  - python>=3.12
   - pytest>=7.1.2
   - conda>=22.9.0
   - conda-build>=3.22.0
