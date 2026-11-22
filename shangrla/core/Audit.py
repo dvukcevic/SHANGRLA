@@ -342,6 +342,9 @@ class Audit:
         with open(log_file, "w") as f:
             f.write(json.dumps(out, cls=NpEncoder))
 
+    # TODO: This doesn't use the root node of the audit tree, but looks
+    #  through all of the assertions on its own. We should make it use the
+    #  root node of the audit tree.
     def summarize_status(self, contests: dict = None):
         """
         Determine whether the audit of individual assertions, contests, and the whole election are finished.
