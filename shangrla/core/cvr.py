@@ -80,7 +80,7 @@ class CVR:
             self,
             id: object = None,
             card_in_batch: int = None,
-            votes: dict = {},
+            votes: dict = None,
             phantom: bool = False,
             tally_pool: object = None,
             pool: bool = False,
@@ -90,7 +90,7 @@ class CVR:
     ):
         self.id = id  # identifier
         self.card_in_batch = card_in_batch  # position of the corresponding card in a physical batch. Used for ONEAudit.
-        self.votes = votes  # contest/vote dict
+        self.votes = {} if votes is None else votes  # contest/vote dict
         self.phantom = phantom  # is this a phantom CVR?
         self.tally_pool = tally_pool  # what tallying pool of cards does this CVR belong to (used by ONEAudit)?
         self.pool = pool  # pool votes on this CVR within its tally_pool?
@@ -159,6 +159,8 @@ class CVR:
         True if there is exactly one vote among those candidates in that contest, where a
         vote means that the value for that key casts as boolean True.
         """
+        if not self.has_contest(contest_id):
+            return False
         v = np.sum(
             [
                 (
@@ -238,6 +240,15 @@ class CVR:
 
     @classmethod
     def cvrs_to_json(cls, cvr):
+        """
+        Serialize one CVR or a list of CVRs as JSON.
+        """
+        if isinstance(cvr, CVR):
+            cvr = cvr.__dict__
+        elif isinstance(cvr, (list, tuple)):
+            cvr = [item.__dict__ if isinstance(item, CVR) else item for item in cvr]
+        elif not isinstance(cvr, (dict, list, tuple)):
+            raise TypeError("cvr must be a CVR, dict, or collection of CVRs")
         return json.dumps(cvr)
 
     @classmethod
@@ -261,9 +272,11 @@ class CVR:
             sample_num = None if "sample_num" not in c.keys() else c["sample_num"]
             p = None if "p" not in c.keys() else c["p"]
             sampled = None if "sampled" not in c.keys() else c["sampled"]
+            card_in_batch = None if "card_in_batch" not in c.keys() else c["card_in_batch"]
             cvr_list.append(
                 CVR(
                     id=c["id"],
+                    card_in_batch=card_in_batch,
                     votes=c["votes"],
                     phantom=phantom,
                     pool=pool,
@@ -368,9 +381,23 @@ class CVR:
         od = OrderedDict()
         for c in cvr_list:
             if c.id not in od:
-                od[c.id] = c
+                od[c.id] = CVR(
+                    id=c.id,
+                    card_in_batch=c.card_in_batch,
+                    votes={contest: dict(votes) for contest, votes in c.votes.items()},
+                    phantom=c.phantom,
+                    tally_pool=c.tally_pool,
+                    pool=c.pool,
+                    sample_num=c.sample_num,
+                    p=c.p,
+                    sampled=c.sampled,
+                )
             else:
-                od[c.id].votes = {**od[c.id].votes, **c.votes}
+                for contest, votes in c.votes.items():
+                    if contest in od[c.id].votes:
+                        od[c.id].votes[contest].update(votes)
+                    else:
+                        od[c.id].votes[contest] = dict(votes)
                 od[c.id].phantom = c.phantom and od[c.id].phantom
                 od[c.id].pool = c.pool or od[c.id].pool
                 if (
@@ -385,7 +412,6 @@ class CVR:
                     raise ValueError(
                         f"two CVRs with the same ID have different tally_pools: \n{str(od)=}\n{str(c)=}"
                     )
-                od[c.id].pool = od[c.id] or c.pool
         return [v for v in od.values()]
 
     @classmethod
@@ -408,28 +434,26 @@ class CVR:
         -----------
         list of CVRs.
         """
-        od = {}
+        pool_by_tally = {}
         for c in cvr_list:
-            if c.id not in od:
-                od[c.id] = c
+            tally_pool = c.tally_pool
+            if tally_pool not in pool_by_tally:
+                pool_by_tally[tally_pool] = c.pool
             else:
-                od[c.id].votes = {**od[c.id].votes, **c.votes}
-                od[c.id].phantom = c.phantom and od[c.id].phantom
-                od[c.id].pool = c.pool or od[c.id].pool
-                if (
-                        (od[c.id].tally_pool is None and c.tally_pool is None)
-                        or (od[c.id].tally_pool is not None and c.tally_pool is None)
-                        or (od[c.id].tally_pool == c.tally_pool)
-                ):
-                    pass
-                elif od[c.id].tally_pool is None and c.tally_pool is not None:
-                    oc[c.id].tally_pool = c.tally_pool
-                else:
-                    raise ValueError(
-                        f"two CVRs with the same ID have different tally_pool values: \n{str(od)=}\n{str(c)=}"
-                    )
-                oc[c.id].pool = oc[c.id] or c.pool
-        return [v for v in od.values()]
+                pool_by_tally[tally_pool] = pool_by_tally[tally_pool] or c.pool
+
+        if force:
+            for c in cvr_list:
+                c.pool = pool_by_tally[c.tally_pool]
+        else:
+            for tally_pool, pooled in pool_by_tally.items():
+                if pooled:
+                    values = {c.pool for c in cvr_list if c.tally_pool == tally_pool}
+                    if len(values) != 1:
+                        raise ValueError(
+                            f"CVRs in tally_pool {tally_pool} have inconsistent pool values"
+                        )
+        return list(cvr_list)
 
     @classmethod
     def set_card_in_batch_lex(cls, cvr_list: Collection['CVR'], tally_pool: dict = None) -> dict:
@@ -528,7 +552,7 @@ class CVR:
         bool : True if any contest is added to any CVR
         """
         added = False
-        for c in [d for d in cvrs if (d.tally_pool in tally_pools.keys() and d.pool)]:
+        for c in [d for d in cvrs if d.tally_pool in tally_pools]:
             added = (
                     c.update_votes({con: {} for con in tally_pools[c.tally_pool]}) or added
             )  # note: order of terms matters!

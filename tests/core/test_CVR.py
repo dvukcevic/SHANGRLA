@@ -13,6 +13,55 @@ from shangrla.core.cvr import CVR
 
 class TestCVR:
 
+    def test_cvrs_to_json(self):
+        cvr = CVR(id="A", votes={"contest": {"Alice": True}})
+        parsed = __import__("json").loads(CVR.cvrs_to_json(cvr))
+        assert parsed["id"] == "A"
+        assert parsed["votes"] == {"contest": {"Alice": True}}
+
+    def test_has_one_vote_without_contest(self):
+        cvr = CVR(id="A", votes={"other": {"Bob": True}})
+        assert not cvr.has_one_vote("missing", ["Alice", "Bob"])
+
+    def test_merge_cvrs_merges_contest_votes_and_metadata(self):
+        cvrs = [
+            CVR(id="A", votes={"contest": {"Alice": 1}}, tally_pool="pool-1"),
+            CVR(id="A", votes={"contest": {"Bob": 2}}, pool=True),
+        ]
+        merged = CVR.merge_cvrs(cvrs)
+        assert len(merged) == 1
+        assert merged[0].votes == {"contest": {"Alice": 1, "Bob": 2}}
+        assert merged[0].tally_pool == "pool-1"
+        assert merged[0].pool
+
+    def test_check_tally_pools_force_and_validate(self):
+        cvrs = [
+            CVR(id="A", tally_pool="pool-1", pool=True),
+            CVR(id="B", tally_pool="pool-1", pool=False),
+            CVR(id="C", tally_pool="pool-2", pool=False),
+        ]
+        assert CVR.check_tally_pools(cvrs, force=True) == cvrs
+        assert all(c.pool for c in cvrs[:2])
+
+        cvrs = [
+            CVR(id="A", tally_pool="pool-1", pool=True),
+            CVR(id="B", tally_pool="pool-1", pool=False),
+        ]
+        with pytest.raises(ValueError):
+            CVR.check_tally_pools(cvrs, force=False)
+
+    def test_tabulate_cards_contests(self):
+        cvrs = [
+            CVR(id="A", votes={"AvB": {"Alice": True}, "CvD": {}}),
+            CVR(id="B", votes={"AvB": {"Bob": True}}),
+            CVR(id="C", votes={"EvF": {}}),
+        ]
+        assert CVR.tabulate_cards_contests(cvrs) == {
+            "AvB": 2,
+            "CvD": 1,
+            "EvF": 1,
+        }
+
     def test_rcv_lfunc_wo(self):
         votes = CVR.from_vote({"Alice": 1, "Bob": 2, "Candy": 3, "Dan": ''})
         assert votes.rcv_lfunc_wo("AvB", "Bob", "Alice") == 1
@@ -34,7 +83,7 @@ class TestCVR:
         assert votes.rcv_votefor_cand("AvB", "Aaron", remaining) == 0
 
     def test_cvr_from_dict(self):
-        cvr_dict = [{'id': 1, 'pool': True, 'tally_pool': 1, 'votes': {'AvB': {'Alice':True}, 'CvD': {'Candy':True}}},
+        cvr_dict = [{'id': 1, 'pool': True, 'tally_pool': 1, 'card_in_batch': 3, 'votes': {'AvB': {'Alice':True}, 'CvD': {'Candy':True}}},
                     {'id': 2, 'sample_num': 0.2, 'p': 0.5, 'sampled': True, 
                               'votes': {'AvB': {'Bob':True}, 'CvD': {'Elvis':True, 'Candy':False}}},
                     {'id': 3, 'tally_pool': 'abc', 'votes': {'EvF': {'Bob':1, 'Edie':2}, 'CvD': {'Elvis':False, 'Candy':True}}}]
@@ -67,6 +116,7 @@ class TestCVR:
         
         assert cvr_list[0].pool 
         assert cvr_list[0].tally_pool == 1
+        assert cvr_list[0].card_in_batch == 3
         assert cvr_list[1].sample_num == 0.2
         assert cvr_list[1].p == 0.5
         assert cvr_list[1].sampled
