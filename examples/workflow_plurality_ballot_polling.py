@@ -46,8 +46,8 @@ def create_workflow_data() -> tuple[Audit, dict[str, Contest], list[CVR], list[C
             "estim": NonnegMean.shrink_trunc,
             "use_style": False,
             # Explicitly set shrink_trunc parameters:
-            "eta": 0.51,  # default: u*(1-epsilon) = 0.999
-            "d": 200,  # default: 100
+            "eta": 0.55,  # default: u*(1-epsilon) = 0.999
+            "d": 20,  # default: 100
         }
     })
     audit.check_audit_parameters(contests)
