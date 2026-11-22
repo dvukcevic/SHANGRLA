@@ -50,3 +50,16 @@ The workflow is:
    with `contest.assertions.set_p_values(mvr_sample, cvr_sample, use_all=True)`.
 6. Call `audit.summarize_status(contests)` to determine whether all assertions
    have crossed the risk limit or whether the audit needs more ballots.
+
+## IRV AWAIRE ballot-polling audit
+
+The complete synthetic example is in
+[`examples/workflow_irv_awaire_ballot_polling.py`](../examples/workflow_irv_awaire_ballot_polling.py).
+An interactive starter is available at
+[`examples/workflow_irv_awaire_ballot_polling_interactive.py`](../examples/workflow_irv_awaire_ballot_polling_interactive.py).
+It configures the contest with `Contest.ASSERTION_STRATEGY.AWAIRE`, creates the
+AWAIRE assertion tree, orders the sampled MVRs with
+`CVR.prep_polling_sample`, and updates evidence with
+`contest.assertions.set_p_values(mvr_sample)`. The sample demonstrates the
+composed alternative-order process reaching certainty. The audit status is
+reported with `audit.summarize_status(contests)`.
