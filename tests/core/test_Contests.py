@@ -82,7 +82,7 @@ class TestContests:
         assert contests['AvB'].tally == {'Alice': 3, 'Bob': 2}
         assert contests['CvD'].tally == {'Candy': 5, 'Elvis': 2}
         assert contests['EvF'].tally is None 
-        # TO DO: assert that this raises a warning about contest EvF
+        # TODO: assert that this raises a warning about contest EvF
             
 
 ##########################################################################################

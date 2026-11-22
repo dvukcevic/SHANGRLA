@@ -407,7 +407,7 @@ class NonnegMean:
             estimated alternative mean to use in alpha
         """
         # set the parameters
-        # TO DO: double check where error_rate_2 is set
+        # TODO: double check where error_rate_2 is set
         p2 = getattr(self, "error_rate_2", 1e-5)  # rate of 2-vote overstatement errors
         return (1 - self.u * (1 - p2)) / (2 - 2 * self.u) + self.u * (1 - p2) - 1 / 2
 

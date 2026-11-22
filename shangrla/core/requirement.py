@@ -316,7 +316,7 @@
 #                 or self.loser != Contest.CANDIDATES.ALL_OTHERS
 #             ):
 #                 raise NotImplementedError(
-#                     f"TO DO: currently only support super-majority with a winner"
+#                     f"TODO: currently only support super-majority with a winner"
 #                 )
 #             else:
 #                 q = (
@@ -641,7 +641,7 @@
 #         """
 #         Construct assertion that winner got >= share_to_win \in (0,1) of the valid votes
 #
-#         **TO DO: This method assumes there was a winner. To audit that there was no winner requires
+#         **TODO: This method assumes there was a winner. To audit that there was no winner requires
 #         flipping things.**
 #
 #         An equivalent condition is:
