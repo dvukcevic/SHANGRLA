@@ -568,7 +568,7 @@ class CompositeNode(Node):
     """
 
     children: List[Node] = field(default_factory=list)
-    combiner: Combiner = field(default_factory=Minimum)
+    combiner: Optional[Combiner] = None
     margin: Optional[float] = None
 
     def __post_init__(self):
@@ -578,7 +578,7 @@ class CompositeNode(Node):
                 raise TypeError("CompositeNode children must be Node instances")
             c._add_parent(self)
         if self.combiner is None:
-            self.combiner = Minimum()
+            self.combiner = MinOfRunningMax() if self.id == "root" else Minimum()
 
     def __getitem__(self, item: int | slice):
         """Access the composite's eprocess; compute missing indices on demand.
@@ -690,7 +690,7 @@ class NodeRegistry:
 
     def __init__(self):
         self.nodes: dict = {}
-        self.root = CompositeNode('root', combiner=Minimum())
+        self.root = CompositeNode('root')
 
     def __getitem__(self, item):
         """Return an existing node by id or create a new LeafNode if missing."""
@@ -740,7 +740,10 @@ class NodeRegistry:
             if isinstance(self.nodes[ident], CompositeNode):
                 return self.nodes[ident]
             raise ValueError(f"Node {ident} already exists as a leaf node")
-        node = CompositeNode(ident, combiner=(combiner if combiner is not None else Minimum()))
+        node = CompositeNode(
+            ident,
+            combiner=combiner,
+        )
         self.nodes[ident] = node
         return node
 

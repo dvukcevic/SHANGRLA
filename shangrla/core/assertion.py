@@ -1252,7 +1252,6 @@ def get_assertion_builder(scf: scc.SocialChoiceFunction) -> AssertionBuilder:
 def plurality_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
     root = reg.get_composite_node("root")
-    root.combiner = eproc.Minimum()
     reg.set_root(root)
     cands = list(handler.candidates)
     for winner in winners:
@@ -1312,7 +1311,6 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
     """
     reg = NodeRegistry()
     root = reg.get_composite_node("root")
-    root.combiner = eproc.Minimum()
     reg.set_root(root)
     loser = Contest.CANDIDATES.ALL_OTHERS
     cands = list(handler.candidates)
@@ -1328,7 +1326,6 @@ def threshold_builder(handler: AssertionHandler, winners: list[str], losers: lis
 def instant_runoff_builder(handler: AssertionHandler, winners: list[str], losers: list[str]) -> None:
     reg = NodeRegistry()
     root = reg.get_composite_node("root")
-    root.combiner = eproc.Minimum()
     reg.set_root(root)
     assertion_json = getattr(handler.contest, "assertion_json", None)
     strategy = handler.contest.assertion_strategy

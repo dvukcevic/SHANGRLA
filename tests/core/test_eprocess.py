@@ -642,6 +642,18 @@ class TestCombinerInvalidation:
 class TestIntegration:
     """Integration tests combining multiple components"""
 
+    def test_composite_root_and_registry_defaults(self):
+        """The named root defaults to MinOfRunningMax; other composites default to Minimum."""
+        direct_root = CompositeNode("root")
+        direct_child = CompositeNode("child")
+        registry = NodeRegistry()
+        registry_child = registry.create_composite("child")
+
+        assert isinstance(direct_root.combiner, MinOfRunningMax)
+        assert isinstance(direct_child.combiner, Minimum)
+        assert isinstance(registry.root.combiner, MinOfRunningMax)
+        assert isinstance(registry_child.combiner, Minimum)
+
     def test_eprocess_with_combiner_sequence(self):
         """Test combining two leaf e-processes"""
         # Create two leaf processes
