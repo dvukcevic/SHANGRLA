@@ -28,6 +28,10 @@
   - [x] IRV RAIRE ballot-level comparison
   - [x] IRV AWAIRE ballot-polling
   - [x] IRV AWAIRE ballot-level comparison
+- [ ] Change the implementation so that e-values are calculated and stored
+      directly, rather than going through a conversion into p-values.  The only
+      such conversion should happen 'at the end' when a value needs to be
+      reported or to determine if a stopping condition has been met.
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
       import organization.
 - [ ] Review the use of IRV 'assertion strategies' and try to unify them, so
