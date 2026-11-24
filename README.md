@@ -82,7 +82,7 @@ David Wu, Alexander Ek, Floyd Everest and Damjan Vukcevic.
 
 ## Licences
 
-Copyright (C) 2019-2024  Philip B. Stark, Vanessa Teague, Michelle Blom,
+Copyright (C) 2019-2026  Philip B. Stark, Vanessa Teague, Michelle Blom,
 Peter Stuckey, Ian Waudby-Smith, Jacob Spertus, Amanda Glazer,
 Damjan Vukcevic, David Wu, Alexander Ek, Floyd Everest.
 
