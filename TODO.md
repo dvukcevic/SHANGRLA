@@ -28,13 +28,26 @@
   - [x] IRV RAIRE ballot-level comparison
   - [x] IRV AWAIRE ballot-polling
   - [x] IRV AWAIRE ballot-level comparison
+- [ ] Rework the example workflow scripts to use external data files, so that
+      the scripts are short and concise.
+- [ ] Use the AuditManager for the workflow scripts.
 - [ ] Change the implementation so that e-values are calculated and stored
       directly, rather than going through a conversion into p-values.  The only
       such conversion should happen 'at the end' when a value needs to be
       reported or to determine if a stopping condition has been met.
+- [ ] Change filenames to all lowercase (e.g., nonnegmean.py).
+- [ ] Use high-quality PRNGs for any randomisation.
 - [ ] Review `shangrla/core/__init__.py` and improve its package exports and
       import organization.
 - [ ] Review the use of IRV 'assertion strategies' and try to unify them, so
-      that we can use both RAIRE and AWAIRE together.
+      that we can use both RAIRE and AWAIRE together.  The assertions for both
+      should be the same, double-check this.  For example, is WINNER_ONLY the
+      same as DND?
+- [ ] To 'seed' AWAIRE with RAIRE, need to write code that will construct an
+      appropriate Node graph using a given set of RAIRE assertions.
 - [ ] Implement AWAIRE v2 ('incremental AWAIRE'), to avoid exhaustive
       enumeration.
+- [ ] Consider internalising RAIRE directly into SHANGRLA, so that the
+      generated suffix tree (with chosen frontier) from RAIRE can be directly
+      used for auditing (and thus AWAIRE) rather than exporting/importing the
+      assertions as JSON.
